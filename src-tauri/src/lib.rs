@@ -1,5 +1,13 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+// Allow static mutable references - legacy pattern for Tauri IPC.
+// This will be migrated to `std::sync::OnceLock` in a future refactor.
+// All access is single-threaded through the main Tauri event loop.
+#![allow(
+    static_mut_refs,
+    reason = "Legacy Tauri IPC pattern - will migrate to OnceLock"
+)]
+
 // Core emulator modules
 mod addressing;
 mod assembler;
@@ -17,11 +25,23 @@ use sbc::Sbc;
 use std::sync::{Arc, Mutex};
 
 /// The Flux32 emulator state - wrapped in Arc<Mutex<>> for thread safety
+///
+/// NOTE: The unsafe Send/Sync impls below assert this is safe for single-threaded
+/// Tauri IPC access. Sbc uses Rc<RefCell<>> internally but is only accessed on
+/// the main thread through the Tauri event loop.
+#[allow(
+    clippy::arc_with_non_send_sync,
+    reason = "Manual Send/Sync impls below"
+)]
 pub struct Flux32Emulator {
     sbc: Arc<Mutex<Sbc>>,
 }
 
 impl Flux32Emulator {
+    #[allow(
+        clippy::arc_with_non_send_sync,
+        reason = "Manual Send/Sync impls on Flux32Emulator"
+    )]
     fn new() -> Self {
         Self {
             sbc: Arc::new(Mutex::new(Sbc::new())),
@@ -79,7 +99,12 @@ pub struct EmulatorStatus {
 unsafe impl Send for Flux32Emulator {}
 unsafe impl Sync for Flux32Emulator {}
 
-/// Global emulator state - use once_cell sync or a simpler approach
+/// Global emulator state.
+///
+/// NOTE: This uses a mutable static which triggers Rust 2024 compatibility warnings.
+/// This pattern is used for simplicity in the Tauri IPC layer where all access is
+/// single-threaded through the main event loop. A future refactor should migrate to
+/// `std::sync::OnceLock` for improved safety and edition compatibility.
 static mut EMULATOR: Option<Flux32Emulator> = None;
 static INIT: std::sync::Once = std::sync::Once::new();
 
@@ -139,15 +164,14 @@ fn emulator_read_memory(address: u32, length: usize) -> Result<Vec<u8>, String> 
     unsafe {
         if let Some(emulator) = EMULATOR.as_ref() {
             let sbc = emulator.sbc.lock().unwrap();
-            let mut data = vec![0u8; length];
-            for i in 0..length {
-                data[i] = sbc
-                    .cpu()
-                    .memory
-                    .read_byte(address + i as u32)
-                    .map_err(|e| e.to_string())?;
-            }
-            Ok(data)
+            (0..length)
+                .map(|i| {
+                    sbc.cpu()
+                        .memory
+                        .read_byte(address + i as u32)
+                        .map_err(|e| e.to_string())
+                })
+                .collect()
         } else {
             Err("Emulator not initialized".to_string())
         }

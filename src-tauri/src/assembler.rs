@@ -1286,7 +1286,8 @@ pub struct Assembler {
     pub include_paths: Vec<PathBuf>,
     /// Current pass (1 or 2).
     pub pass: u8,
-    /// Current file being assembled.
+    /// Current file being assembled (reserved for future error reporting).
+    #[allow(dead_code)]
     pub current_file: PathBuf,
     /// Pending EQU definitions with forward references.
     pending_equs: Vec<(String, Expr)>,
@@ -1362,7 +1363,8 @@ impl Assembler {
     }
 
     /// Assembles a source file and returns the binary output.
-    /// This is the main entry point for assembling.
+    /// This is the main entry point for assembling from a file.
+    #[allow(dead_code)]
     pub fn assemble_file(&mut self, path: &std::path::Path) -> Result<Vec<u8>, String> {
         let source = std::fs::read_to_string(path)
             .map_err(|e| format!("cannot read {}: {}", path.display(), e))?;

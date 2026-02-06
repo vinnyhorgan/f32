@@ -477,6 +477,10 @@ impl Sbc {
     ///
     /// These stubs bypass the ROM's TRAP handlers entirely, directly
     /// implementing the core syscalls. Stubs are placed at $E00080-$E000FF.
+    #[allow(
+        unused_assignments,
+        reason = "addr is incremented sequentially during instruction writing"
+    )]
     fn install_trap_stubs(&mut self) {
         // Base address for stubs (in system variable area)
         let stub_base: u32 = 0xE00080;
@@ -588,7 +592,7 @@ impl Sbc {
         let _ = mem.write_word(addr, 0x1011);
         addr += 2; // MOVE.B (A1),D0
         let _ = mem.write_word(addr, 0x4E73);
-        addr += 2; // RTE
+        addr += 2; // RTE (last write to addr in this sequence)
 
         // Set TRAP vectors in the exception vector table.
         // IMPORTANT: use load_binary (not write_long) because the vector table

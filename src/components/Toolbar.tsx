@@ -14,7 +14,6 @@ import {
 } from "./ui/tooltip";
 import { Separator } from "./ui/separator";
 import {
-    Play,
     StepForward,
     RotateCcw,
     RefreshCw,

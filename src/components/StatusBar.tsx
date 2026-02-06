@@ -20,7 +20,7 @@ interface StatusBarProps {
 }
 
 /** Desktop-style status bar pinned to the bottom of the window */
-export function StatusBar({ status, cpuState, initialized, error, loading, ledState }: StatusBarProps) {
+export function StatusBar({ status, cpuState, initialized, error, loading }: StatusBarProps) {
     const halted = status?.halted ?? true;
     const cycles = status?.cycles ?? 0;
     const isRunning = loading ?? false;
