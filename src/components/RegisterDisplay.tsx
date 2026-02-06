@@ -1,29 +1,25 @@
 /**
  * RegisterDisplay Component
  *
- * Displays the M68K CPU register state with a modern, sleek design
+ * Compact, tabular display of M68K CPU registers.
+ * Shows data registers, address registers, special registers, and flags
+ * in a dense, monospace layout suitable for a desktop debugger.
  */
 
-import React from "react";
 import type { CpuState } from "../lib/emulator-types";
 import { cn } from "../lib/utils";
-import { Cpu, Shield, Flag } from "lucide-react";
 
 interface RegisterDisplayProps {
   cpuState: CpuState | null;
   className?: string;
 }
 
-/**
- * Format a number as hexadecimal
- */
+/** Format a number as hexadecimal with zero-padding */
 function formatHex(value: number, digits: number = 8): string {
   return value.toString(16).toUpperCase().padStart(digits, "0");
 }
 
-/**
- * Parse SR flags into individual flag states
- */
+/** Parse SR flags into individual flag booleans */
 function parseFlags(sr: number) {
   return {
     C: (sr & 0x0001) !== 0,
@@ -32,218 +28,140 @@ function parseFlags(sr: number) {
     N: (sr & 0x0008) !== 0,
     X: (sr & 0x0010) !== 0,
     S: (sr & 0x2000) !== 0,
-    I0: (sr & 0x0100) !== 0,
-    I1: (sr & 0x0200) !== 0,
-    I2: (sr & 0x0400) !== 0,
   };
 }
 
-/**
- * Single register display cell
- */
-function RegisterCell({
+/** Single flag badge */
+function FlagBadge({ label, active }: { label: string; active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold font-mono transition-colors",
+        active
+          ? "bg-primary/20 text-primary border border-primary/30"
+          : "bg-muted/50 text-muted-foreground/40 border border-transparent"
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** A single register row: label + hex value */
+function RegisterRow({
   label,
   value,
-  highlight,
+  changed,
 }: {
   label: string;
   value: string;
-  highlight?: boolean;
+  changed?: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        "group relative flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200",
-        highlight
-          ? "bg-blue-500/10 border border-blue-500/20"
-          : "bg-white/[0.02] border border-white/5 hover:border-white/10"
-      )}
-    >
-      <span className="text-[10px] font-bold text-slate-500 w-6 uppercase">
+    <div className="flex items-center gap-2 px-2 py-[3px] rounded-sm hover:bg-accent/50 transition-colors group">
+      <span className="text-[11px] font-mono font-semibold text-muted-foreground w-7 shrink-0">
         {label}
       </span>
-      <span className="font-mono text-sm text-slate-300 tracking-wider">
+      <span
+        className={cn(
+          "text-[12px] font-mono tracking-wider",
+          changed ? "text-primary" : "text-foreground/80"
+        )}
+      >
         {value}
       </span>
     </div>
   );
 }
 
-/**
- * Flag indicator component
- */
-function FlagIndicator({
-  label,
-  set,
-}: {
-  label: string;
-  set: boolean;
-}) {
+/** Compact section header */
+function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className={cn(
-        "flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold transition-all duration-200",
-        set
-          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10"
-          : "bg-white/[0.02] text-slate-600 border border-white/5"
-      )}
-    >
-      {label}
+    <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+      {children}
     </div>
   );
 }
 
-/**
- * Main RegisterDisplay component
- */
+/** Main RegisterDisplay component */
 export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
   if (!cpuState) {
     return (
-      <div
-        className={cn(
-          "p-5 rounded-xl border border-white/5 bg-white/[0.02]",
-          className,
-        )}
-      >
-        <div className="flex items-center gap-2 text-slate-500 text-xs">
-          <Cpu className="w-4 h-4" />
-          <span>No CPU state available</span>
-        </div>
+      <div className={cn("p-4 text-xs text-muted-foreground", className)}>
+        No CPU state available
       </div>
     );
   }
 
   const flags = parseFlags(cpuState.sr);
-  const interruptMask = ((cpuState.sr >> 8) & 0x7).toString();
+  const interruptMask = (cpuState.sr >> 8) & 0x7;
 
   return (
-    <div
-      className={cn(
-        "rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden",
-        className,
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-blue-400" />
-          <h2 className="text-sm font-semibold text-slate-200">CPU Registers</h2>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-semibold border transition-all duration-200",
-            flags.S
-              ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-              : "bg-white/[0.02] text-slate-500 border-white/5",
-          )}
-        >
-          <Shield className="w-3 h-3" />
-          {flags.S ? "SUPERVISOR" : "USER"}
+    <div className={cn("flex flex-col min-w-0 overflow-auto", className)}>
+      {/* Data Registers */}
+      <SectionHeader>Data</SectionHeader>
+      <div className="grid grid-cols-2 gap-x-1">
+        {cpuState.d.map((value, i) => (
+          <RegisterRow
+            key={`D${i}`}
+            label={`D${i}`}
+            value={formatHex(value)}
+            changed={value !== 0}
+          />
+        ))}
+      </div>
+
+      {/* Address Registers */}
+      <SectionHeader>Address</SectionHeader>
+      <div className="grid grid-cols-2 gap-x-1">
+        {cpuState.a.map((value, i) => (
+          <RegisterRow
+            key={`A${i}`}
+            label={`A${i}`}
+            value={formatHex(value)}
+            changed={value !== 0}
+          />
+        ))}
+      </div>
+
+      {/* Special Registers */}
+      <SectionHeader>System</SectionHeader>
+      <div className="grid grid-cols-1 gap-x-1">
+        <RegisterRow label="PC" value={formatHex(cpuState.pc)} changed />
+        <RegisterRow label="SR" value={formatHex(cpuState.sr, 4)} />
+        <RegisterRow label="USP" value={formatHex(cpuState.usp)} changed={cpuState.usp !== 0} />
+        <RegisterRow label="SSP" value={formatHex(cpuState.ssp)} changed={cpuState.ssp !== 0} />
+      </div>
+
+      {/* Flags */}
+      <SectionHeader>Flags</SectionHeader>
+      <div className="flex items-center gap-1 px-2 pb-1">
+        {(["X", "N", "Z", "V", "C"] as const).map((flag) => (
+          <FlagBadge key={flag} label={flag} active={flags[flag]} />
+        ))}
+        <div className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+          <span>IPL</span>
+          <span className={cn(
+            "font-semibold",
+            interruptMask > 0 ? "text-amber-400" : "text-muted-foreground/50"
+          )}>
+            {interruptMask}
+          </span>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Data Registers */}
-        <div>
-          <div className="text-[10px] font-semibold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            Data Registers
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {cpuState.d.map((value, i) => (
-              <RegisterCell
-                key={`D${i}`}
-                label={`D${i}`}
-                value={formatHex(value)}
-                highlight={value !== 0}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Address Registers */}
-        <div>
-          <div className="text-[10px] font-semibold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-            Address Registers
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {cpuState.a.map((value, i) => (
-              <RegisterCell
-                key={`A${i}`}
-                label={`A${i}`}
-                value={formatHex(value)}
-                highlight={value !== 0}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Special Registers */}
-        <div>
-          <div className="text-[10px] font-semibold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            Special Registers
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <RegisterCell label="PC" value={formatHex(cpuState.pc)} highlight />
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
-              <span className="text-[10px] font-bold text-slate-500 w-6 uppercase">
-                SR
-              </span>
-              <span className="font-mono text-sm text-slate-300 tracking-wider">
-                {formatHex(cpuState.sr, 4)}
-              </span>
-            </div>
-            <RegisterCell
-              label="USP"
-              value={formatHex(cpuState.usp)}
-              highlight={cpuState.usp !== 0}
-            />
-            <RegisterCell
-              label="SSP"
-              value={formatHex(cpuState.ssp)}
-              highlight={cpuState.ssp !== 0}
-            />
-          </div>
-        </div>
-
-        {/* Condition Codes & Interrupt */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Flags */}
-          <div>
-            <div className="text-[10px] font-semibold text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-              <Flag className="w-3 h-3" />
-              Condition Codes
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {["X", "N", "Z", "V", "C"].map((flag) => {
-                const flagSet = flags[flag as keyof typeof flags];
-                return (
-                  <div
-                    key={flag}
-                    className="flex items-center gap-1"
-                  >
-                    <FlagIndicator label={flag} set={flagSet} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Interrupt Priority */}
-          <div>
-            <div className="text-[10px] font-semibold text-slate-500 mb-2 uppercase tracking-wider">
-              Interrupt Priority
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5">
-              <span className="text-[10px] text-slate-500">IPL</span>
-              <span className="font-mono text-sm text-slate-300">
-                {interruptMask}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* Mode badge */}
+      <div className="px-2 pb-2 pt-1">
+        <span
+          className={cn(
+            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+            flags.S
+              ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+              : "bg-muted/50 text-muted-foreground/60 border border-transparent"
+          )}
+        >
+          {flags.S ? "Supervisor" : "User"}
+        </span>
       </div>
     </div>
   );

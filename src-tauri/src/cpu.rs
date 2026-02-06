@@ -311,7 +311,7 @@ impl Cpu {
         // Save current PC for instructions that need it (e.g., branches)
         let current_pc = self.registers.pc;
         // Most instructions expect PC to point to the first extension word
-        let pc = current_pc + 2;
+        let pc = current_pc.wrapping_add(2);
 
         // Extract key bit fields for decoding
         let top_nibble = (opcode >> 12) & 0x0F;

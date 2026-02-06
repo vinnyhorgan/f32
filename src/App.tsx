@@ -1,17 +1,23 @@
 /**
  * Flux32 Main Application
  *
- * M68K Emulator GUI Debugger
- * Integrates all emulator components into a unified interface
+ * M68K Emulator GUI — desktop-style layout with:
+ * - MenuBar (top)
+ * - Toolbar (debug controls)
+ * - Sidebar (registers) + Main area (memory viewer)
+ * - StatusBar (bottom)
  */
 
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
+import { AppMenuBar } from "./components/AppMenuBar";
+import { Toolbar } from "./components/Toolbar";
+import { StatusBar } from "./components/StatusBar";
 import { RegisterDisplay } from "./components/RegisterDisplay";
-import { ControlPanel } from "./components/ControlPanel";
 import { MemoryViewer } from "./components/MemoryViewer";
 import { useEmulatorStore } from "./lib/emulator-store";
 import { EmulatorAPI } from "./lib/emulator-api";
-import { Cpu, Activity } from "lucide-react";
+import { ScrollArea } from "./components/ui/scroll-area";
+import { Separator } from "./components/ui/separator";
 
 function App() {
   const {
@@ -29,131 +35,134 @@ function App() {
     clearError,
   } = useEmulatorStore();
 
-  // Initialize emulator on mount
+  const isHalted = status?.halted ?? false;
+
+  const handleRun = useCallback(() => run(100000), [run]);
+
+  /** Initialize emulator on mount */
   useEffect(() => {
-    if (!initialized) {
-      init();
-    }
-  }, []);
+    if (!initialized) init();
+  }, [initialized, init]);
+
+  /** Global keyboard shortcuts */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (loading) return;
+      switch (e.key) {
+        case "F5":
+          e.preventDefault();
+          handleRun();
+          break;
+        case "F10":
+          e.preventDefault();
+          step();
+          break;
+        case "F6":
+          e.preventDefault();
+          reset();
+          break;
+        case "F9":
+          e.preventDefault();
+          refresh();
+          break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [loading, handleRun, step, reset, refresh]);
+
+  /** Dismiss error on Escape */
+  useEffect(() => {
+    if (!error) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearError();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [error, clearError]);
 
   return (
-    <div className="h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-100 flex flex-col overflow-hidden">
-      {/* Glassmorphic Header */}
-      <header className="shrink-0 border-b border-white/5 bg-white/[0.02] backdrop-blur-xl">
-        <div className="flex items-center justify-between px-6 py-3">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 shadow-lg shadow-blue-500/20">
-              <Cpu className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                Flux32
-              </h1>
-              <p className="text-[10px] text-slate-500 font-medium tracking-wide uppercase">
-                M68K Debugger
-              </p>
-            </div>
-          </div>
+    <div className="h-screen w-full flex flex-col overflow-hidden bg-background text-foreground">
+      {/* Menu bar */}
+      <AppMenuBar
+        isRunning={loading}
+        onStep={step}
+        onRun={handleRun}
+        onReset={reset}
+        onRefresh={refresh}
+      />
 
-          {/* Status indicators */}
-          <div className="flex items-center gap-4">
-            {status && (
-              <div className="flex items-center gap-4 px-4 py-1.5 rounded-full bg-black/20 border border-white/5">
-                {/* Status */}
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`relative w-2 h-2 rounded-full ${
-                      status.halted ? "bg-amber-500" : "bg-emerald-500"
-                    }`}
-                  >
-                    <div
-                      className={`absolute inset-0 rounded-full animate-ping ${
-                        status.halted ? "bg-amber-500/30" : "bg-emerald-500/30"
-                      }`}
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-slate-300">
-                    {status.halted ? "HALTED" : "RUNNING"}
-                  </span>
-                </div>
-
-                {/* Separator */}
-                <div className="w-px h-3 bg-white/10" />
-
-                {/* Cycles */}
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <Activity className="w-3 h-3" />
-                  <span className="font-mono">{status.cycles.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-            {loading && (
-              <div className="text-xs text-blue-400 font-medium animate-pulse">
-                Loading...
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      {/* Toolbar */}
+      <Toolbar
+        isRunning={loading}
+        isHalted={isHalted}
+        onStep={step}
+        onRun={handleRun}
+        onReset={reset}
+        onRefresh={refresh}
+      />
 
       {/* Error banner */}
       {error && (
-        <div className="shrink-0 mx-6 mt-3 px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center justify-between">
-          <span className="text-red-400 text-xs font-medium">{error}</span>
+        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-destructive text-xs">
+          <span className="truncate">{error}</span>
           <button
             onClick={clearError}
-            className="text-slate-400 hover:text-slate-200 text-xs transition-colors"
+            className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Main content - scrollable */}
-      <main className="flex-1 overflow-auto px-6 py-4">
-        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Left column: Controls and Registers */}
-          <div className="lg:col-span-4 space-y-4">
-            <ControlPanel
-              isRunning={loading}
-              isHalted={status?.halted ?? false}
-              onStep={step}
-              onRun={() => run(100000)}
-              onReset={reset}
-              onRefresh={refresh}
-            />
+      {/* Main content area: sidebar + center panel */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left sidebar — Registers */}
+        <aside className="w-[260px] shrink-0 border-r border-border bg-card flex flex-col">
+          <div
+            data-no-select
+            className="shrink-0 flex items-center h-7 px-3 border-b border-border bg-muted/40"
+          >
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Registers
+            </span>
+          </div>
+          <ScrollArea className="flex-1">
             <RegisterDisplay cpuState={cpuState} />
-          </div>
+          </ScrollArea>
+        </aside>
 
-          {/* Right column: Memory Viewer */}
-          <div className="lg:col-span-8">
-            <MemoryViewer
-              onReadMemory={async (address, length) => {
-                const result = await EmulatorAPI.readMemory(address, length);
-                if (result.status === "success") {
-                  return result.data;
-                }
-                throw new Error(result.error);
-              }}
-              initialAddress={memoryAddress}
-              displayLength={256}
-            />
-          </div>
-        </div>
-      </main>
+        <Separator orientation="vertical" className="bg-border" />
 
-      {/* Footer */}
-      <footer className="shrink-0 border-t border-white/5 bg-black/20 backdrop-blur-sm px-6 py-2">
-        <div className="flex items-center justify-between text-[10px] text-slate-600 font-medium">
-          <span>Flux32 v0.1.0</span>
-          <div className="flex items-center gap-3 font-mono">
-            <span>RAM: $C00000-$CFFFFF</span>
-            <span>ROM: $000000-$0FFFFF</span>
-            <span>UART: $A00000</span>
+        {/* Main panel — Memory Viewer */}
+        <main className="flex-1 flex flex-col min-w-0 bg-background">
+          <div
+            data-no-select
+            className="shrink-0 flex items-center h-7 px-3 border-b border-border bg-muted/40"
+          >
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Memory
+            </span>
           </div>
-        </div>
-      </footer>
+          <MemoryViewer
+            className="flex-1 min-h-0"
+            onReadMemory={async (address, length) => {
+              const result = await EmulatorAPI.readMemory(address, length);
+              if (result.status === "success") return result.data;
+              throw new Error(result.error);
+            }}
+            initialAddress={memoryAddress}
+            displayLength={512}
+          />
+        </main>
+      </div>
+
+      {/* Status bar */}
+      <StatusBar
+        status={status}
+        initialized={initialized}
+        error={error}
+      />
     </div>
   );
 }

@@ -1,16 +1,13 @@
 /**
  * MemoryViewer Component
  *
- * Displays a hex dump of memory with a modern, sleek design
- * - Address column
- * - Hex bytes (16 per line)
- * - ASCII representation
- * - Navigation controls
+ * Hex dump display modeled after professional hex editors.
+ * Dense monospace layout with address, hex bytes, and ASCII columns.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "./ui/button";
-import { ChevronUp, ChevronDown, ArrowUp, ArrowDown, Database } from "lucide-react";
+import { ChevronUp, ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface MemoryViewerProps {
@@ -33,45 +30,32 @@ interface MemoryLine {
   ascii: string;
 }
 
-/**
- * Format a number as hex with zero-padding
- */
+/** Format a number as hex with zero-padding */
 function formatHex(value: number, digits: number = 8): string {
   return value.toString(16).toUpperCase().padStart(digits, "0");
 }
 
-/**
- * Convert bytes to ASCII representation (or . for non-printable)
- */
+/** Convert bytes to ASCII representation (or . for non-printable) */
 function bytesToAscii(bytes: number[]): string {
   return bytes
     .map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : "."))
     .join("");
 }
 
-/**
- * Parse address input string to number
- */
+/** Parse address input string to number (supports $hex, 0xhex, decimal) */
 function parseAddressInput(input: string): number | null {
   const trimmed = input.trim();
   let address: number;
-
   if (trimmed.startsWith("$") || trimmed.startsWith("0x")) {
-    address = parseInt(trimmed.slice(1), 16);
+    address = parseInt(trimmed.replace("$", "").replace("0x", ""), 16);
   } else {
-    address = parseInt(trimmed, 10);
+    address = parseInt(trimmed, 16);
   }
-
-  if (isNaN(address) || address < 0 || address > 0xffffff) {
-    return null;
-  }
-
+  if (isNaN(address) || address < 0 || address > 0xffffff) return null;
   return address;
 }
 
-/**
- * Main MemoryViewer component
- */
+/** Main MemoryViewer component */
 export function MemoryViewer({
   onReadMemory,
   initialAddress = 0,
@@ -84,63 +68,44 @@ export function MemoryViewer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Load memory at current address
-   */
-  const loadMemory = async (address: number) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const alignedAddress = address & ~(BYTES_PER_LINE - 1);
-      const bytes = await onReadMemory(alignedAddress, displayLength);
-
-      const newLines: MemoryLine[] = [];
-      for (let i = 0; i < bytes.length; i += BYTES_PER_LINE) {
-        const lineBytes = bytes.slice(i, i + BYTES_PER_LINE);
-        newLines.push({
-          address: alignedAddress + i,
-          bytes: lineBytes,
-          ascii: bytesToAscii(lineBytes),
-        });
+  const loadMemory = useCallback(
+    async (address: number) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const alignedAddress = address & ~(BYTES_PER_LINE - 1);
+        const bytes = await onReadMemory(alignedAddress, displayLength);
+        const newLines: MemoryLine[] = [];
+        for (let i = 0; i < bytes.length; i += BYTES_PER_LINE) {
+          const lineBytes = bytes.slice(i, i + BYTES_PER_LINE);
+          newLines.push({
+            address: alignedAddress + i,
+            bytes: lineBytes,
+            ascii: bytesToAscii(lineBytes),
+          });
+        }
+        setLines(newLines);
+        setCurrentAddress(alignedAddress);
+        setAddressInput(formatHex(alignedAddress));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setLines([]);
+      } finally {
+        setLoading(false);
       }
+    },
+    [onReadMemory, displayLength]
+  );
 
-      setLines(newLines);
-      setCurrentAddress(alignedAddress);
-      setAddressInput(formatHex(alignedAddress));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setLines([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * Navigation handlers
-   */
-  const goToPreviousPage = () => {
-    const newAddress = Math.max(0, currentAddress - displayLength);
-    loadMemory(newAddress);
-  };
-
+  const goToPreviousPage = () => loadMemory(Math.max(0, currentAddress - displayLength));
   const goToNextPage = () => {
-    const newAddress = currentAddress + displayLength;
-    if (newAddress <= 0xffffff - displayLength) {
-      loadMemory(newAddress);
-    }
+    const next = currentAddress + displayLength;
+    if (next <= 0xffffff - displayLength) loadMemory(next);
   };
-
-  const goToPreviousLine = () => {
-    const newAddress = Math.max(0, currentAddress - BYTES_PER_LINE);
-    loadMemory(newAddress);
-  };
-
+  const goToPreviousLine = () => loadMemory(Math.max(0, currentAddress - BYTES_PER_LINE));
   const goToNextLine = () => {
-    const newAddress = currentAddress + BYTES_PER_LINE;
-    if (newAddress <= 0xffffff - displayLength) {
-      loadMemory(newAddress);
-    }
+    const next = currentAddress + BYTES_PER_LINE;
+    if (next <= 0xffffff - displayLength) loadMemory(next);
   };
 
   const handleAddressSubmit = (e: React.FormEvent) => {
@@ -149,165 +114,160 @@ export function MemoryViewer({
     if (address !== null) {
       loadMemory(address);
     } else {
-      setError("Invalid address. Use $hex or 0xhex format, e.g., $1000");
+      setError("Invalid address");
     }
   };
 
-  // Load initial memory
   useEffect(() => {
     loadMemory(initialAddress);
-  }, [initialAddress]);
+  }, [initialAddress, loadMemory]);
 
   return (
-    <div
-      className={cn(
-        "rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden",
-        className,
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 text-purple-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Memory Viewer</h2>
-        </div>
+    <div className={cn("flex flex-col h-full min-w-0", className)}>
+      {/* Toolbar row */}
+      <div
+        data-no-select
+        className="flex items-center gap-1.5 px-2 py-1 border-b border-border bg-muted/30 shrink-0"
+      >
+        <form onSubmit={handleAddressSubmit} className="flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground font-mono">$</span>
+          <input
+            type="text"
+            value={addressInput}
+            onChange={(e) => setAddressInput(e.target.value)}
+            className="w-20 px-1.5 py-0.5 text-[11px] font-mono bg-background border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            placeholder="Address"
+          />
+          <Button type="submit" size="xs" variant="secondary" className="h-5 px-1.5 text-[10px]">
+            Go
+          </Button>
+        </form>
 
-        {/* Address input & navigation */}
-        <div className="flex items-center gap-2">
-          <form onSubmit={handleAddressSubmit} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={addressInput}
-              onChange={(e) => setAddressInput(e.target.value)}
-              className="w-28 px-2.5 py-1.5 text-xs font-mono bg-black/20 border border-white/10 rounded-lg text-slate-300 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
-              placeholder="Address"
-            />
-            <Button type="submit" size="sm" variant="outline" className="h-8 px-3">
-              Go
-            </Button>
-          </form>
-
-          {/* Navigation */}
-          <div className="flex gap-1 ml-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={goToPreviousPage}
-              disabled={loading || currentAddress === 0}
-              title="Previous page (Page Up)"
-              className="h-8 w-8 p-0"
-            >
-              <ChevronUp className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={goToPreviousLine}
-              disabled={loading || currentAddress === 0}
-              title="Previous line (Up)"
-              className="h-8 w-8 p-0"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={goToNextLine}
-              disabled={loading || currentAddress > 0xffffff - displayLength}
-              title="Next line (Down)"
-              className="h-8 w-8 p-0"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={goToNextPage}
-              disabled={loading || currentAddress > 0xffffff - displayLength}
-              title="Next page (Page Down)"
-              className="h-8 w-8 p-0"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Refresh */}
+        <div className="flex items-center gap-0.5 ml-auto">
           <Button
-            size="sm"
-            variant="outline"
-            onClick={() => loadMemory(currentAddress)}
-            disabled={loading}
-            className="h-8 px-3"
+            size="icon-xs"
+            variant="ghost"
+            onClick={goToPreviousPage}
+            disabled={loading || currentAddress === 0}
+            title="Page Up"
           >
-            {loading ? "..." : "Refresh"}
+            <ChevronUp className="size-3" />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={goToPreviousLine}
+            disabled={loading || currentAddress === 0}
+            title="Line Up"
+          >
+            <ArrowUp className="size-3" />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={goToNextLine}
+            disabled={loading || currentAddress > 0xffffff - displayLength}
+            title="Line Down"
+          >
+            <ArrowDown className="size-3" />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={goToNextPage}
+            disabled={loading || currentAddress > 0xffffff - displayLength}
+            title="Page Down"
+          >
+            <ChevronDown className="size-3" />
           </Button>
         </div>
       </div>
 
-      {/* Error display */}
+      {/* Error banner */}
       {error && (
-        <div className="mx-5 mt-3 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs">
+        <div className="px-2 py-1 bg-destructive/10 text-destructive text-[10px] border-b border-destructive/20">
           {error}
         </div>
       )}
 
-      {/* Memory display */}
-      <div className="p-4">
-        <div className="bg-black/40 rounded-lg border border-white/5 p-3 font-mono text-xs overflow-auto max-h-[500px]">
-          {lines.length === 0 ? (
-            <div className="text-slate-600 text-center py-8">
-              {loading ? "Loading memory..." : "No memory data"}
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {lines.map((line) => (
-                <div
-                  key={line.address}
-                  className="flex gap-4 hover:bg-white/[0.02] px-2 py-0.5 rounded transition-colors"
-                >
-                  {/* Address */}
-                  <span className="text-purple-400 select-none shrink-0 w-20">
-                    {formatHex(line.address)}:
-                  </span>
-
-                  {/* Hex bytes */}
-                  <div className="flex gap-1 flex-wrap flex-1">
-                    {line.bytes.map((byte, i) => (
+      {/* Hex dump table */}
+      <div className="flex-1 overflow-auto bg-background">
+        {lines.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+            {loading ? "Loading..." : "No data"}
+          </div>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 bg-muted/60 backdrop-blur-sm z-10">
+              <tr className="text-[9px] font-mono text-muted-foreground uppercase">
+                <th className="text-left px-2 py-1 font-medium w-[72px]">Address</th>
+                <th className="text-left px-1 py-1 font-medium">
+                  {/* Hex column headers with 8-byte grouping */}
+                  <div className="flex">
+                    {Array.from({ length: BYTES_PER_LINE }, (_, i) => (
                       <span
                         key={i}
                         className={cn(
-                          "w-5 text-center transition-colors",
-                          byte === 0
-                            ? "text-slate-700"
-                            : byte === 0xff
-                              ? "text-slate-600"
-                              : "text-slate-300",
+                          "w-[18px] text-center",
+                          i > 0 && i % 8 === 0 ? "ml-2" : "ml-[3px]"
                         )}
                       >
-                        {formatHex(byte, 2)}
+                        {i.toString(16).toUpperCase()}
                       </span>
                     ))}
                   </div>
-
-                  {/* ASCII */}
-                  <span className="text-emerald-400 select-none shrink-0 ml-auto">
-                    |{line.ascii}|
-                  </span>
-                </div>
+                </th>
+                <th className="text-left px-2 py-1 font-medium w-[140px]">ASCII</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line) => (
+                <tr
+                  key={line.address}
+                  className="hover:bg-accent/40 transition-colors"
+                >
+                  <td className="px-2 py-[1px] font-mono text-[11px] text-primary/80 whitespace-nowrap">
+                    {formatHex(line.address)}
+                  </td>
+                  <td className="px-1 py-[1px]">
+                    <div className="flex">
+                      {line.bytes.map((byte, i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            "w-[18px] text-center font-mono text-[11px]",
+                            i > 0 && i % 8 === 0 ? "ml-2" : "ml-[3px]",
+                            byte === 0
+                              ? "text-muted-foreground/20"
+                              : byte === 0xff
+                                ? "text-muted-foreground/40"
+                                : "text-foreground/90"
+                          )}
+                        >
+                          {formatHex(byte, 2)}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-2 py-[1px] font-mono text-[11px] text-emerald-500/70 whitespace-nowrap">
+                    {line.ascii}
+                  </td>
+                </tr>
               ))}
-            </div>
-          )}
-        </div>
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Status bar */}
-      <div className="px-5 py-2 border-t border-white/5 bg-white/[0.02]">
-        <div className="flex items-center justify-between text-[10px] text-slate-600 font-mono">
-          <span>
-            ${formatHex(currentAddress)} - ${formatHex(currentAddress + displayLength - 1)}
-          </span>
-          <span>{displayLength} bytes</span>
-        </div>
+      {/* Bottom address range */}
+      <div
+        data-no-select
+        className="shrink-0 flex items-center justify-between px-2 py-0.5 border-t border-border bg-muted/30 text-[10px] text-muted-foreground font-mono"
+      >
+        <span>
+          ${formatHex(currentAddress)}-${formatHex(currentAddress + displayLength - 1)}
+        </span>
+        <span>{displayLength} bytes</span>
       </div>
     </div>
   );
