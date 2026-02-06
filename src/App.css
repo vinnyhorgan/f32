@@ -117,7 +117,10 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
+  html,
+  body,
+  #root {
     @apply bg-background text-foreground;
+    @apply m-0 p-0 w-full h-full overflow-hidden;
   }
 }

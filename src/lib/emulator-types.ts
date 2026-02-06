@@ -24,6 +24,18 @@ export interface CpuState {
 }
 
 /**
+ * Emulator status information
+ */
+export interface EmulatorStatus {
+  /** Whether the CPU is halted */
+  halted: boolean;
+  /** Total cycles executed */
+  cycles: number;
+  /** Cycles executed in last run */
+  executed: number;
+}
+
+/**
  * Result type for emulator operations
  */
 export type EmulatorResult<T> = { status: "success"; data: T } | { status: "error"; error: string };

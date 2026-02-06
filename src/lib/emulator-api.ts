@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   CpuState,
   EmulatorResult,
+  EmulatorStatus,
   MemoryViewOptions,
 } from "./emulator-types";
 
@@ -66,10 +67,28 @@ export class EmulatorAPI {
 
   /**
    * Run the emulator continuously
+   * @param maxCycles Maximum number of cycles to execute (default: 100000)
    */
-  static async run(): Promise<EmulatorResult<string>> {
+  static async run(maxCycles?: number): Promise<EmulatorResult<EmulatorStatus>> {
     try {
-      const result = await invoke<string>("emulator_run");
+      const result = await invoke<EmulatorStatus>("emulator_run", {
+        maxCycles,
+      });
+      return { status: "success", data: result };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Get emulator status (halted state, cycle count)
+   */
+  static async getStatus(): Promise<EmulatorResult<EmulatorStatus>> {
+    try {
+      const result = await invoke<EmulatorStatus>("emulator_get_status");
       return { status: "success", data: result };
     } catch (error) {
       return {
@@ -117,14 +136,11 @@ export class EmulatorAPI {
     length: number,
   ): Promise<EmulatorResult<number[]>> {
     try {
-      const bytes: number[] = [];
-      for (let i = 0; i < length; i++) {
-        const result = await invoke<number>("emulator_read_byte", {
-          address: address + i,
-        });
-        bytes.push(result);
-      }
-      return { status: "success", data: bytes };
+      const result = await invoke<number[]>("emulator_read_memory", {
+        address,
+        length,
+      });
+      return { status: "success", data: result };
     } catch (error) {
       return {
         status: "error",

@@ -35,14 +35,14 @@ impl Flux32Emulator {
     /// Get the CPU state as a JSON-serializable structure
     fn get_cpu_state(&self) -> CpuState {
         let sbc = self.sbc.lock().unwrap();
-        // TODO: Extract actual CPU state from SBC
+        let regs = sbc.registers();
         CpuState {
-            d: vec![0; 8],
-            a: vec![0; 7],
-            pc: 0,
-            sr: 0,
-            usp: 0,
-            ssp: 0,
+            d: regs.d.to_vec(),
+            a: regs.a[0..7].to_vec(), // A0-A6 (A7 is SP)
+            pc: regs.pc,
+            sr: regs.sr,
+            usp: regs.usp(),
+            ssp: regs.get_ssp(),
         }
     }
 }
@@ -62,6 +62,14 @@ pub struct CpuState {
     sr: u16,
     usp: u32,
     ssp: u32,
+}
+
+/// Emulator status information
+#[derive(serde::Serialize)]
+pub struct EmulatorStatus {
+    halted: bool,
+    cycles: u64,
+    executed: u64,
 }
 
 // SAFETY: We assert that Flux32Emulator is Send + Sync since it's Arc<Mutex<Sbc>>
@@ -113,9 +121,26 @@ fn emulator_get_registers() -> Result<CpuState, String> {
 #[tauri::command]
 fn emulator_read_byte(address: u32) -> Result<u8, String> {
     unsafe {
-        if EMULATOR.is_some() {
-            // TODO: Implement actual memory read
-            Ok(0)
+        if let Some(emulator) = EMULATOR.as_ref() {
+            let sbc = emulator.sbc.lock().unwrap();
+            sbc.cpu().memory.read_byte(address).map_err(|e| e.to_string())
+        } else {
+            Err("Emulator not initialized".to_string())
+        }
+    }
+}
+
+/// Read a block of bytes from memory
+#[tauri::command]
+fn emulator_read_memory(address: u32, length: usize) -> Result<Vec<u8>, String> {
+    unsafe {
+        if let Some(emulator) = EMULATOR.as_ref() {
+            let sbc = emulator.sbc.lock().unwrap();
+            let mut data = vec![0u8; length];
+            for i in 0..length {
+                data[i] = sbc.cpu().memory.read_byte(address + i as u32).map_err(|e| e.to_string())?;
+            }
+            Ok(data)
         } else {
             Err("Emulator not initialized".to_string())
         }
@@ -126,9 +151,9 @@ fn emulator_read_byte(address: u32) -> Result<u8, String> {
 #[tauri::command]
 fn emulator_write_byte(address: u32, value: u8) -> Result<(), String> {
     unsafe {
-        if EMULATOR.is_some() {
-            // TODO: Implement actual memory write
-            Ok(())
+        if let Some(emulator) = EMULATOR.as_mut() {
+            let mut sbc = emulator.sbc.lock().unwrap();
+            sbc.cpu_mut().memory.write_byte(address, value).map_err(|e| e.to_string())
         } else {
             Err("Emulator not initialized".to_string())
         }
@@ -153,11 +178,34 @@ fn emulator_reset() -> Result<String, String> {
 
 /// Run the emulator continuously
 #[tauri::command]
-fn emulator_run() -> Result<String, String> {
+fn emulator_run(max_cycles: Option<u64>) -> Result<EmulatorStatus, String> {
     unsafe {
-        if EMULATOR.is_some() {
-            // TODO: Implement continuous execution
-            Ok("Running".to_string())
+        if let Some(emulator) = EMULATOR.as_mut() {
+            let cycles = max_cycles.unwrap_or(100000);
+            let mut sbc = emulator.sbc.lock().unwrap();
+            let executed = sbc.run(cycles);
+            Ok(EmulatorStatus {
+                halted: sbc.is_halted(),
+                cycles: sbc.cycles(),
+                executed,
+            })
+        } else {
+            Err("Emulator not initialized".to_string())
+        }
+    }
+}
+
+/// Get emulator status (halted, cycles, etc.)
+#[tauri::command]
+fn emulator_get_status() -> Result<EmulatorStatus, String> {
+    unsafe {
+        if let Some(emulator) = EMULATOR.as_ref() {
+            let sbc = emulator.sbc.lock().unwrap();
+            Ok(EmulatorStatus {
+                halted: sbc.is_halted(),
+                cycles: sbc.cycles(),
+                executed: 0,
+            })
         } else {
             Err("Emulator not initialized".to_string())
         }
@@ -181,7 +229,9 @@ pub fn run() {
             emulator_reset,
             emulator_run,
             emulator_get_registers,
+            emulator_get_status,
             emulator_read_byte,
+            emulator_read_memory,
             emulator_write_byte,
             emulator_assemble,
         ])

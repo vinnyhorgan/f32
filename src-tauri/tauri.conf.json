@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "f32",
-        "width": 800,
-        "height": 600
+        "title": "Flux32",
+        "width": 1280,
+        "height": 720,
+        "minWidth": 1000,
+        "minHeight": 600,
+        "resizable": true
       }
     ],
     "security": {
