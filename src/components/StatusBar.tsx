@@ -6,19 +6,24 @@
  */
 
 import type { EmulatorStatus } from "../lib/emulator-types";
+import type { CpuState } from "../lib/emulator-types";
 import { cn } from "../lib/utils";
 import { Separator } from "./ui/separator";
 
 interface StatusBarProps {
     status: EmulatorStatus | null;
+    cpuState: CpuState | null;
     initialized: boolean;
     error: string | null;
+    loading?: boolean;
+    ledState?: boolean;
 }
 
 /** Desktop-style status bar pinned to the bottom of the window */
-export function StatusBar({ status, initialized, error }: StatusBarProps) {
+export function StatusBar({ status, cpuState, initialized, error, loading, ledState }: StatusBarProps) {
     const halted = status?.halted ?? true;
     const cycles = status?.cycles ?? 0;
+    const isRunning = loading ?? false;
 
     return (
         <div
@@ -41,9 +46,11 @@ export function StatusBar({ status, initialized, error }: StatusBarProps) {
                                 ? "bg-muted-foreground/50"
                                 : error
                                     ? "bg-destructive"
-                                    : halted
-                                        ? "bg-amber-500"
-                                        : "bg-emerald-500"
+                                    : isRunning
+                                        ? "bg-emerald-500 animate-pulse"
+                                        : halted
+                                            ? "bg-amber-500"
+                                            : "bg-muted-foreground/60"
                         )}
                     />
                     <span className="font-medium">
@@ -51,9 +58,11 @@ export function StatusBar({ status, initialized, error }: StatusBarProps) {
                             ? "Not Initialized"
                             : error
                                 ? "Error"
-                                : halted
-                                    ? "Halted"
-                                    : "Running"}
+                                : isRunning
+                                    ? "Running"
+                                    : halted
+                                        ? "Halted"
+                                        : "Ready"}
                     </span>
                 </div>
 
@@ -64,6 +73,16 @@ export function StatusBar({ status, initialized, error }: StatusBarProps) {
                     <span className="font-mono text-[10px] px-1.5">
                         {cycles.toLocaleString()} cycles
                     </span>
+                )}
+
+                {/* PC value */}
+                {cpuState && (
+                    <>
+                        <Separator orientation="vertical" className="h-3.5 bg-border/60" />
+                        <span className="font-mono text-[10px] px-1.5 text-emerald-500/80">
+                            PC ${cpuState.pc.toString(16).toUpperCase().padStart(6, "0")}
+                        </span>
+                    </>
                 )}
 
                 {/* Error message */}

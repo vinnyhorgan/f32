@@ -10,8 +10,8 @@ mod instructions;
 mod memory;
 mod registers;
 mod sbc;
-mod uart;
 mod test_runner;
+mod uart;
 
 use sbc::Sbc;
 use std::sync::{Arc, Mutex};
@@ -23,7 +23,9 @@ pub struct Flux32Emulator {
 
 impl Flux32Emulator {
     fn new() -> Self {
-        Self { sbc: Arc::new(Mutex::new(Sbc::new())) }
+        Self {
+            sbc: Arc::new(Mutex::new(Sbc::new())),
+        }
     }
 
     /// Execute a single instruction step
@@ -84,10 +86,8 @@ static INIT: std::sync::Once = std::sync::Once::new();
 /// Initialize a new emulator instance
 #[tauri::command]
 fn emulator_init() -> Result<String, String> {
-    INIT.call_once(|| {
-        unsafe {
-            EMULATOR = Some(Flux32Emulator::new());
-        }
+    INIT.call_once(|| unsafe {
+        EMULATOR = Some(Flux32Emulator::new());
     });
     Ok("Emulator initialized".to_string())
 }
@@ -123,7 +123,10 @@ fn emulator_read_byte(address: u32) -> Result<u8, String> {
     unsafe {
         if let Some(emulator) = EMULATOR.as_ref() {
             let sbc = emulator.sbc.lock().unwrap();
-            sbc.cpu().memory.read_byte(address).map_err(|e| e.to_string())
+            sbc.cpu()
+                .memory
+                .read_byte(address)
+                .map_err(|e| e.to_string())
         } else {
             Err("Emulator not initialized".to_string())
         }
@@ -138,7 +141,11 @@ fn emulator_read_memory(address: u32, length: usize) -> Result<Vec<u8>, String> 
             let sbc = emulator.sbc.lock().unwrap();
             let mut data = vec![0u8; length];
             for i in 0..length {
-                data[i] = sbc.cpu().memory.read_byte(address + i as u32).map_err(|e| e.to_string())?;
+                data[i] = sbc
+                    .cpu()
+                    .memory
+                    .read_byte(address + i as u32)
+                    .map_err(|e| e.to_string())?;
             }
             Ok(data)
         } else {
@@ -153,18 +160,84 @@ fn emulator_write_byte(address: u32, value: u8) -> Result<(), String> {
     unsafe {
         if let Some(emulator) = EMULATOR.as_mut() {
             let mut sbc = emulator.sbc.lock().unwrap();
-            sbc.cpu_mut().memory.write_byte(address, value).map_err(|e| e.to_string())
+            sbc.cpu_mut()
+                .memory
+                .write_byte(address, value)
+                .map_err(|e| e.to_string())
         } else {
             Err("Emulator not initialized".to_string())
         }
     }
 }
 
-/// Assemble M68K assembly code
+/// Assemble M68K assembly code and return the binary
 #[tauri::command]
 fn emulator_assemble(code: String) -> Result<Vec<u8>, String> {
-    // TODO: Implement assembler integration
-    Ok(vec![])
+    let mut asm = assembler::Assembler::new();
+    // Add the rom directory as an include path so app.inc etc. can be found
+    let rom_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rom");
+    asm.include_paths.push(rom_dir);
+    let path = std::path::Path::new("<editor>");
+    asm.assemble_source(&code, path)
+}
+
+/// Assemble code, load it into RAM at APP_START, and start execution
+#[tauri::command]
+fn emulator_assemble_and_load(code: String) -> Result<String, String> {
+    let binary = emulator_assemble(code)?;
+    if binary.is_empty() {
+        return Err("Assembly produced no output".to_string());
+    }
+    unsafe {
+        if let Some(emulator) = EMULATOR.as_mut() {
+            let mut sbc = emulator.sbc.lock().unwrap();
+            sbc.load_app(&binary);
+            sbc.run_app();
+            Ok(format!("Loaded {} bytes at $E00100", binary.len()))
+        } else {
+            Err("Emulator not initialized".to_string())
+        }
+    }
+}
+
+/// Read UART output (drain output buffer)
+#[tauri::command]
+fn emulator_read_uart() -> Result<Vec<u8>, String> {
+    unsafe {
+        if let Some(emulator) = EMULATOR.as_mut() {
+            let mut sbc = emulator.sbc.lock().unwrap();
+            Ok(sbc.drain_output())
+        } else {
+            Err("Emulator not initialized".to_string())
+        }
+    }
+}
+
+/// Write a character to UART RX (simulate keyboard input)
+#[tauri::command]
+fn emulator_write_uart(byte: u8) -> Result<(), String> {
+    unsafe {
+        if let Some(emulator) = EMULATOR.as_mut() {
+            let mut sbc = emulator.sbc.lock().unwrap();
+            sbc.send_char(byte);
+            Ok(())
+        } else {
+            Err("Emulator not initialized".to_string())
+        }
+    }
+}
+
+/// Get the LED state
+#[tauri::command]
+fn emulator_get_led() -> Result<bool, String> {
+    unsafe {
+        if let Some(emulator) = EMULATOR.as_ref() {
+            let sbc = emulator.sbc.lock().unwrap();
+            Ok(sbc.led_state())
+        } else {
+            Err("Emulator not initialized".to_string())
+        }
+    }
 }
 
 /// Reset the emulator to initial state
@@ -234,6 +307,10 @@ pub fn run() {
             emulator_read_memory,
             emulator_write_byte,
             emulator_assemble,
+            emulator_assemble_and_load,
+            emulator_read_uart,
+            emulator_write_uart,
+            emulator_get_led,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

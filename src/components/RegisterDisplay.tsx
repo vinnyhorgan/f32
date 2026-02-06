@@ -4,8 +4,10 @@
  * Compact, tabular display of M68K CPU registers.
  * Shows data registers, address registers, special registers, and flags
  * in a dense, monospace layout suitable for a desktop debugger.
+ * Highlights registers that changed since last update.
  */
 
+import { useRef, useEffect } from "react";
 import type { CpuState } from "../lib/emulator-types";
 import { cn } from "../lib/utils";
 
@@ -52,11 +54,21 @@ function RegisterRow({
   label,
   value,
   changed,
+  highlight,
 }: {
   label: string;
   value: string;
   changed?: boolean;
+  highlight?: "primary" | "amber" | "green";
 }) {
+  const colorClass = changed
+    ? highlight === "amber"
+      ? "text-amber-400"
+      : highlight === "green"
+        ? "text-emerald-400"
+        : "text-primary"
+    : "text-foreground/60";
+
   return (
     <div className="flex items-center gap-2 px-2 py-[3px] rounded-sm hover:bg-accent/50 transition-colors group">
       <span className="text-[11px] font-mono font-semibold text-muted-foreground w-7 shrink-0">
@@ -64,8 +76,8 @@ function RegisterRow({
       </span>
       <span
         className={cn(
-          "text-[12px] font-mono tracking-wider",
-          changed ? "text-primary" : "text-foreground/80"
+          "text-[12px] font-mono tracking-wider transition-colors duration-300",
+          colorClass,
         )}
       >
         {value}
@@ -83,8 +95,37 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Track which registers changed between updates */
+function getChangedSet(prev: CpuState | null, curr: CpuState): Set<string> {
+  const changed = new Set<string>();
+  if (!prev) return changed;
+
+  for (let i = 0; i < 8; i++) {
+    if ((prev.d[i] ?? 0) !== (curr.d[i] ?? 0)) changed.add(`D${i}`);
+  }
+  for (let i = 0; i < 7; i++) {
+    if ((prev.a[i] ?? 0) !== (curr.a[i] ?? 0)) changed.add(`A${i}`);
+  }
+  if (prev.pc !== curr.pc) changed.add("PC");
+  if (prev.sr !== curr.sr) changed.add("SR");
+  if (prev.usp !== curr.usp) changed.add("USP");
+  if (prev.ssp !== curr.ssp) changed.add("SSP");
+
+  return changed;
+}
+
 /** Main RegisterDisplay component */
 export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
+  const prevStateRef = useRef<CpuState | null>(null);
+  const changedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (cpuState) {
+      changedRef.current = getChangedSet(prevStateRef.current, cpuState);
+      prevStateRef.current = { ...cpuState, d: [...cpuState.d], a: [...cpuState.a] };
+    }
+  }, [cpuState]);
+
   if (!cpuState) {
     return (
       <div className={cn("p-4 text-xs text-muted-foreground", className)}>
@@ -95,6 +136,7 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
 
   const flags = parseFlags(cpuState.sr);
   const interruptMask = (cpuState.sr >> 8) & 0x7;
+  const changed = changedRef.current;
 
   return (
     <div className={cn("flex flex-col min-w-0 overflow-auto", className)}>
@@ -106,7 +148,7 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
             key={`D${i}`}
             label={`D${i}`}
             value={formatHex(value)}
-            changed={value !== 0}
+            changed={changed.has(`D${i}`)}
           />
         ))}
       </div>
@@ -119,7 +161,7 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
             key={`A${i}`}
             label={`A${i}`}
             value={formatHex(value)}
-            changed={value !== 0}
+            changed={changed.has(`A${i}`)}
           />
         ))}
       </div>
@@ -127,10 +169,10 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
       {/* Special Registers */}
       <SectionHeader>System</SectionHeader>
       <div className="grid grid-cols-1 gap-x-1">
-        <RegisterRow label="PC" value={formatHex(cpuState.pc)} changed />
-        <RegisterRow label="SR" value={formatHex(cpuState.sr, 4)} />
-        <RegisterRow label="USP" value={formatHex(cpuState.usp)} changed={cpuState.usp !== 0} />
-        <RegisterRow label="SSP" value={formatHex(cpuState.ssp)} changed={cpuState.ssp !== 0} />
+        <RegisterRow label="PC" value={formatHex(cpuState.pc)} changed={changed.has("PC")} highlight="green" />
+        <RegisterRow label="SR" value={formatHex(cpuState.sr, 4)} changed={changed.has("SR")} highlight="amber" />
+        <RegisterRow label="USP" value={formatHex(cpuState.usp)} changed={changed.has("USP")} />
+        <RegisterRow label="SSP" value={formatHex(cpuState.ssp)} changed={changed.has("SSP")} />
       </div>
 
       {/* Flags */}

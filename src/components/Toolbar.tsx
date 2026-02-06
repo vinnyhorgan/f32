@@ -19,6 +19,8 @@ import {
     RotateCcw,
     RefreshCw,
     Square,
+    Rocket,
+    FastForward,
 } from "lucide-react";
 
 interface ToolbarProps {
@@ -28,6 +30,8 @@ interface ToolbarProps {
     onRun: () => void;
     onReset: () => void;
     onRefresh: () => void;
+    onAssembleAndRun?: () => void;
+    ledState?: boolean;
 }
 
 /** A compact, icon-centric debug toolbar */
@@ -38,6 +42,8 @@ export function Toolbar({
     onRun,
     onReset,
     onRefresh,
+    onAssembleAndRun,
+    ledState,
 }: ToolbarProps) {
     return (
         <TooltipProvider delayDuration={400}>
@@ -45,7 +51,31 @@ export function Toolbar({
                 data-no-select
                 className="shrink-0 flex items-center gap-0.5 h-9 px-2 border-b border-border bg-muted/30"
             >
-                {/* Debug controls */}
+                {/* Assemble & Run */}
+                {onAssembleAndRun && (
+                    <>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={onAssembleAndRun}
+                                    disabled={isRunning}
+                                    className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                                >
+                                    <Rocket className="size-3.5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="text-xs">
+                                <p>Assemble &amp; Run <kbd className="ml-1.5 font-mono text-[10px] text-muted-foreground bg-muted px-1 py-0.5 rounded">F5</kbd></p>
+                            </TooltipContent>
+                        </Tooltip>
+
+                        <Separator orientation="vertical" className="h-4 mx-1 bg-border/60" />
+                    </>
+                )}
+
+                {/* Continue running */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
@@ -53,20 +83,21 @@ export function Toolbar({
                             size="icon-sm"
                             onClick={onRun}
                             disabled={isRunning}
-                            className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                            className="text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                         >
                             {isRunning ? (
                                 <Square className="size-3.5" />
                             ) : (
-                                <Play className="size-3.5" />
+                                <FastForward className="size-3.5" />
                             )}
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-xs">
-                        <p>Run <kbd className="ml-1.5 font-mono text-[10px] text-muted-foreground bg-muted px-1 py-0.5 rounded">F5</kbd></p>
+                        <p>Continue <kbd className="ml-1.5 font-mono text-[10px] text-muted-foreground bg-muted px-1 py-0.5 rounded">F8</kbd></p>
                     </TooltipContent>
                 </Tooltip>
 
+                {/* Step */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
@@ -86,6 +117,7 @@ export function Toolbar({
 
                 <Separator orientation="vertical" className="h-4 mx-1 bg-border/60" />
 
+                {/* Reset */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
@@ -103,6 +135,7 @@ export function Toolbar({
                     </TooltipContent>
                 </Tooltip>
 
+                {/* Refresh */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
@@ -137,6 +170,19 @@ export function Toolbar({
                         {isRunning ? "Running" : isHalted ? "Halted" : "Ready"}
                     </span>
                 </div>
+
+                {/* LED indicator */}
+                {ledState !== undefined && (
+                    <div className="flex items-center gap-1.5 px-2 ml-auto">
+                        <div
+                            className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${ledState
+                                    ? "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]"
+                                    : "bg-muted-foreground/20"
+                                }`}
+                        />
+                        <span className="text-[10px] text-muted-foreground font-medium">LED</span>
+                    </div>
+                )}
             </div>
         </TooltipProvider>
     );

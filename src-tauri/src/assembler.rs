@@ -922,12 +922,13 @@ pub fn encode_ea(
         }
         AddrMode::PcDisp(expr) => {
             let target = try_eval_expr(expr, symbols, pc, pass, scope)?;
-            let disp = (target - (pc as i64 + 2)) as i16;
+            // pc is already the extension word address (callers pass self.pc + 2)
+            let disp = (target - pc as i64) as i16;
             Ok((0b111, 0b010, vec![disp as u16]))
         }
         AddrMode::PcIndex(expr, xn, sz, is_addr) => {
             let target = try_eval_expr(expr, symbols, pc, pass, scope)?;
-            let disp = (target - (pc as i64 + 2)) as i8;
+            let disp = (target - pc as i64) as i8;
             let xr = if *is_addr { 0x8000 } else { 0 };
             let xs = if *sz == Size::Long { 0x0800 } else { 0 };
             let ext = xr | xs | ((*xn as u16) << 12) | ((disp as u8) as u16);

@@ -21,8 +21,8 @@ interface MemoryViewerProps {
   className?: string;
 }
 
-const BYTES_PER_LINE = 16;
-const LINE_COUNT = 16;
+const BYTES_PER_LINE = 8;
+const LINE_COUNT = 24;
 
 interface MemoryLine {
   address: number;
@@ -127,59 +127,82 @@ export function MemoryViewer({
       {/* Toolbar row */}
       <div
         data-no-select
-        className="flex items-center gap-1.5 px-2 py-1 border-b border-border bg-muted/30 shrink-0"
+        className="flex flex-col gap-1 px-2 py-1 border-b border-border bg-muted/30 shrink-0"
       >
-        <form onSubmit={handleAddressSubmit} className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground font-mono">$</span>
-          <input
-            type="text"
-            value={addressInput}
-            onChange={(e) => setAddressInput(e.target.value)}
-            className="w-20 px-1.5 py-0.5 text-[11px] font-mono bg-background border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            placeholder="Address"
-          />
-          <Button type="submit" size="xs" variant="secondary" className="h-5 px-1.5 text-[10px]">
-            Go
-          </Button>
-        </form>
+        <div className="flex items-center gap-1.5">
+          <form onSubmit={handleAddressSubmit} className="flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground font-mono">$</span>
+            <input
+              type="text"
+              value={addressInput}
+              onChange={(e) => setAddressInput(e.target.value)}
+              className="w-20 px-1.5 py-0.5 text-[11px] font-mono bg-background border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="Address"
+            />
+            <Button type="submit" size="xs" variant="secondary" className="h-5 px-1.5 text-[10px]">
+              Go
+            </Button>
+          </form>
 
-        <div className="flex items-center gap-0.5 ml-auto">
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={goToPreviousPage}
-            disabled={loading || currentAddress === 0}
-            title="Page Up"
-          >
-            <ChevronUp className="size-3" />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={goToPreviousLine}
-            disabled={loading || currentAddress === 0}
-            title="Line Up"
-          >
-            <ArrowUp className="size-3" />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={goToNextLine}
-            disabled={loading || currentAddress > 0xffffff - displayLength}
-            title="Line Down"
-          >
-            <ArrowDown className="size-3" />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={goToNextPage}
-            disabled={loading || currentAddress > 0xffffff - displayLength}
-            title="Page Down"
-          >
-            <ChevronDown className="size-3" />
-          </Button>
+          <div className="flex items-center gap-0.5 ml-auto">
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={goToPreviousPage}
+              disabled={loading || currentAddress === 0}
+              title="Page Up"
+            >
+              <ChevronUp className="size-3" />
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={goToPreviousLine}
+              disabled={loading || currentAddress === 0}
+              title="Line Up"
+            >
+              <ArrowUp className="size-3" />
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={goToNextLine}
+              disabled={loading || currentAddress > 0xffffff - displayLength}
+              title="Line Down"
+            >
+              <ArrowDown className="size-3" />
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={goToNextPage}
+              disabled={loading || currentAddress > 0xffffff - displayLength}
+              title="Page Down"
+            >
+              <ChevronDown className="size-3" />
+            </Button>
+          </div>
+        </div>
+        {/* Quick-jump region buttons */}
+        <div className="flex items-center gap-1">
+          {[
+            { label: "ROM", addr: 0x000000 },
+            { label: "Vectors", addr: 0x000080 },
+            { label: "UART", addr: 0xA00000 },
+            { label: "RAM", addr: 0xC00000 },
+            { label: "App", addr: 0xE00100 },
+          ].map(({ label, addr }) => (
+            <Button
+              key={label}
+              size="xs"
+              variant={currentAddress === addr ? "secondary" : "ghost"}
+              className="h-4 px-1.5 text-[9px] font-mono"
+              onClick={() => loadMemory(addr)}
+              disabled={loading}
+            >
+              {label}
+            </Button>
+          ))}
         </div>
       </div>
 
@@ -202,14 +225,14 @@ export function MemoryViewer({
               <tr className="text-[9px] font-mono text-muted-foreground uppercase">
                 <th className="text-left px-2 py-1 font-medium w-[72px]">Address</th>
                 <th className="text-left px-1 py-1 font-medium">
-                  {/* Hex column headers with 8-byte grouping */}
+                  {/* Hex column headers */}
                   <div className="flex">
                     {Array.from({ length: BYTES_PER_LINE }, (_, i) => (
                       <span
                         key={i}
                         className={cn(
                           "w-[18px] text-center",
-                          i > 0 && i % 8 === 0 ? "ml-2" : "ml-[3px]"
+                          i > 0 && i % 4 === 0 ? "ml-2" : "ml-[3px]"
                         )}
                       >
                         {i.toString(16).toUpperCase()}
@@ -217,7 +240,7 @@ export function MemoryViewer({
                     ))}
                   </div>
                 </th>
-                <th className="text-left px-2 py-1 font-medium w-[140px]">ASCII</th>
+                <th className="text-left px-2 py-1 font-medium">ASCII</th>
               </tr>
             </thead>
             <tbody>
@@ -236,7 +259,7 @@ export function MemoryViewer({
                           key={i}
                           className={cn(
                             "w-[18px] text-center font-mono text-[11px]",
-                            i > 0 && i % 8 === 0 ? "ml-2" : "ml-[3px]",
+                            i > 0 && i % 4 === 0 ? "ml-2" : "ml-[3px]",
                             byte === 0
                               ? "text-muted-foreground/20"
                               : byte === 0xff

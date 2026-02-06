@@ -183,6 +183,66 @@ export class EmulatorAPI {
   }
 
   /**
+   * Assemble code, load into RAM, and start execution
+   */
+  static async assembleAndLoad(code: string): Promise<EmulatorResult<string>> {
+    try {
+      const result = await invoke<string>("emulator_assemble_and_load", { code });
+      return { status: "success", data: result };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Read UART output (drain TX buffer)
+   */
+  static async readUart(): Promise<EmulatorResult<number[]>> {
+    try {
+      const result = await invoke<number[]>("emulator_read_uart");
+      return { status: "success", data: result };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Write a character to UART RX (simulate keyboard input)
+   */
+  static async writeUart(byte: number): Promise<EmulatorResult<null>> {
+    try {
+      await invoke("emulator_write_uart", { byte });
+      return { status: "success", data: null };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
+   * Get LED state
+   */
+  static async getLed(): Promise<EmulatorResult<boolean>> {
+    try {
+      const result = await invoke<boolean>("emulator_get_led");
+      return { status: "success", data: result };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
    * Format a memory view for display
    */
   static formatMemoryView(
@@ -210,70 +270,3 @@ export class EmulatorAPI {
     return lines;
   }
 }
-
-/**
- * React hook for emulator state management
- *
- * This hook provides a convenient way to manage emulator state in React components.
- */
-export function useEmulator() {
-  const [isInitialized, setIsInitialized] = React.useState(false);
-  const [cpuState, setCpuState] = React.useState<CpuState | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const init = React.useCallback(async () => {
-    const result = await EmulatorAPI.init();
-    if (result.status === "success") {
-      setIsInitialized(true);
-      setError(null);
-    } else {
-      setError(result.error);
-    }
-    return result;
-  }, []);
-
-  const step = React.useCallback(async () => {
-    const result = await EmulatorAPI.step();
-    if (result.status === "error") {
-      setError(result.error);
-    } else {
-      setError(null);
-    }
-    return result;
-  }, []);
-
-  const reset = React.useCallback(async () => {
-    const result = await EmulatorAPI.reset();
-    if (result.status === "success") {
-      setCpuState(null);
-      setError(null);
-    } else {
-      setError(result.error);
-    }
-    return result;
-  }, []);
-
-  const getRegisters = React.useCallback(async () => {
-    const result = await EmulatorAPI.getRegisters();
-    if (result.status === "success") {
-      setCpuState(result.data);
-      setError(null);
-    } else {
-      setError(result.error);
-    }
-    return result;
-  }, []);
-
-  return {
-    isInitialized,
-    cpuState,
-    error,
-    init,
-    step,
-    reset,
-    getRegisters,
-    api: EmulatorAPI,
-  };
-}
-
-import React from "react";

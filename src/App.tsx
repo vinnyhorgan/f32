@@ -1,23 +1,122 @@
 /**
  * Flux32 Main Application
  *
- * M68K Emulator GUI — desktop-style layout with:
+ * M68K Emulator IDE — desktop-style layout with:
  * - MenuBar (top)
- * - Toolbar (debug controls)
- * - Sidebar (registers) + Main area (memory viewer)
+ * - Toolbar (debug controls + assemble button)
+ * - Code Editor (left main area)
+ * - Right panel: tabs for Registers / Memory / UART
  * - StatusBar (bottom)
  */
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { AppMenuBar } from "./components/AppMenuBar";
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { RegisterDisplay } from "./components/RegisterDisplay";
 import { MemoryViewer } from "./components/MemoryViewer";
+import { CodeEditor, type CodeEditorRef } from "./components/CodeEditor";
+import { UartTerminal } from "./components/UartTerminal";
 import { useEmulatorStore } from "./lib/emulator-store";
 import { EmulatorAPI } from "./lib/emulator-api";
 import { ScrollArea } from "./components/ui/scroll-area";
-import { Separator } from "./components/ui/separator";
+
+type RightTab = "registers" | "memory" | "uart";
+
+/** Example programs available from File > Examples */
+const EXAMPLES: Record<string, string> = {
+  hello: `; Hello World — prints a message via UART
+    include "app.inc"
+
+start:
+    lea     msg(pc),a0
+    sys     OutStr
+    moveq   #10,d0
+    sys     OutChar
+    sys     Exit
+
+msg:
+    dc.b    "Hello from Flux32!",0
+    even
+`,
+  chars: `; Print Characters — demonstrates OutChar syscall
+    include "app.inc"
+
+start:
+    ; Print uppercase alphabet A-Z
+    moveq   #26,d2          ; counter
+    moveq   #'A',d0         ; start character
+.loop:
+    sys     OutChar         ; print character
+    addq.b  #1,d0           ; next char
+    subq.w  #1,d2           ; decrement counter
+    bne.s   .loop           ; loop until done
+
+    ; Print newline
+    moveq   #13,d0
+    sys     OutChar
+    moveq   #10,d0
+    sys     OutChar
+
+    sys     Exit
+`,
+  count: `; Count to 10 — demonstrates looping and OutChar
+    include "app.inc"
+
+start:
+    moveq   #1,d3           ; counter
+
+.loop:
+    ; Print counter digit (1-9)
+    move.l  d3,d0
+    add.b   #'0',d0         ; make ASCII
+    sys     OutChar
+
+    ; Print space
+    moveq   #' ',d0
+    sys     OutChar
+
+    ; Next
+    addq.w  #1,d3
+    cmpi.w  #9,d3
+    ble.s   .loop
+
+    ; Print "10" as two characters
+    moveq   #'1',d0
+    sys     OutChar
+    moveq   #'0',d0
+    sys     OutChar
+
+    ; Newline and exit
+    moveq   #10,d0
+    sys     OutChar
+    sys     Exit
+`,
+  memory: `; Memory Operations — demonstrates data in RAM
+    include "app.inc"
+
+start:
+    ; Store values in memory
+    lea     buffer(pc),a0
+    move.l  #$DEADBEEF,(a0)+
+    move.l  #$CAFEBABE,(a0)+
+    move.l  #$12345678,(a0)+
+
+    ; Print confirmation
+    lea     msg(pc),a0
+    sys     OutStr
+    moveq   #10,d0
+    sys     OutChar
+
+    sys     Exit
+
+msg:
+    dc.b    "Memory written at buffer!",0
+    even
+buffer:
+    ds.l    4               ; reserve 4 longs
+`,
+};
 
 function App() {
   const {
@@ -25,19 +124,46 @@ function App() {
     cpuState,
     status,
     error,
+    assemblyError,
     loading,
     memoryAddress,
+    uartOutput,
+    ledState,
     init,
     step,
     run,
     reset,
     refresh,
     clearError,
+    pollUart,
+    sendUartChar,
+    setSourceCode,
+    assembleAndRun,
+    clearUart,
   } = useEmulatorStore();
 
+  const [rightTab, setRightTab] = useState<RightTab>("registers");
+  const editorRef = useRef<CodeEditorRef>(null);
   const isHalted = status?.halted ?? false;
 
   const handleRun = useCallback(() => run(100000), [run]);
+
+  const handleAssembleAndRun = useCallback(() => {
+    assembleAndRun();
+  }, [assembleAndRun]);
+
+  const handleStep = useCallback(async () => {
+    await step();
+    await pollUart();
+  }, [step, pollUart]);
+
+  const handleLoadExample = useCallback((name: string) => {
+    const code = EXAMPLES[name];
+    if (code && editorRef.current) {
+      editorRef.current.setContent(code);
+      setSourceCode(code);
+    }
+  }, [setSourceCode]);
 
   /** Initialize emulator on mount */
   useEffect(() => {
@@ -48,120 +174,192 @@ function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (loading) return;
+
       switch (e.key) {
         case "F5":
           e.preventDefault();
-          handleRun();
+          handleAssembleAndRun();
           break;
         case "F10":
           e.preventDefault();
-          step();
+          handleStep();
           break;
         case "F6":
           e.preventDefault();
           reset();
           break;
+        case "F8":
+          e.preventDefault();
+          handleRun();
+          break;
         case "F9":
           e.preventDefault();
           refresh();
+          break;
+        case "Escape":
+          if (error || assemblyError) {
+            e.preventDefault();
+            clearError();
+          }
+          break;
+        default:
+          if (e.ctrlKey && e.shiftKey) {
+            if (e.code === "Digit1") { e.preventDefault(); setRightTab("registers"); }
+            if (e.code === "Digit2") { e.preventDefault(); setRightTab("memory"); }
+            if (e.code === "Digit3") { e.preventDefault(); setRightTab("uart"); }
+          }
           break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [loading, handleRun, step, reset, refresh]);
+  }, [loading, handleAssembleAndRun, handleStep, handleRun, reset, refresh, error, assemblyError, clearError]);
 
-  /** Dismiss error on Escape */
-  useEffect(() => {
-    if (!error) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") clearError();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [error, clearError]);
+  const handleEditorChange = useCallback(
+    (value: string) => {
+      setSourceCode(value);
+    },
+    [setSourceCode],
+  );
+
+  const displayError = assemblyError || error;
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden bg-background text-foreground">
       {/* Menu bar */}
       <AppMenuBar
         isRunning={loading}
-        onStep={step}
+        onStep={handleStep}
         onRun={handleRun}
         onReset={reset}
         onRefresh={refresh}
+        onAssembleAndRun={handleAssembleAndRun}
+        onLoadExample={handleLoadExample}
+        onSwitchTab={(tab) => setRightTab(tab as RightTab)}
       />
 
       {/* Toolbar */}
       <Toolbar
         isRunning={loading}
         isHalted={isHalted}
-        onStep={step}
+        onStep={handleStep}
         onRun={handleRun}
         onReset={reset}
         onRefresh={refresh}
+        onAssembleAndRun={handleAssembleAndRun}
+        ledState={ledState}
       />
 
       {/* Error banner */}
-      {error && (
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-destructive text-xs">
-          <span className="truncate">{error}</span>
+      {displayError && (
+        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-destructive text-xs font-mono">
+          <span className="truncate">{displayError}</span>
           <button
             onClick={clearError}
-            className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wider"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Main content area: sidebar + center panel */}
+      {/* Main content: Editor (left) + Panels (right) */}
       <div className="flex-1 flex min-h-0">
-        {/* Left sidebar — Registers */}
-        <aside className="w-[260px] shrink-0 border-r border-border bg-card flex flex-col">
+        {/* Left — Code Editor */}
+        <div className="flex-1 flex flex-col min-w-0">
           <div
             data-no-select
             className="shrink-0 flex items-center h-7 px-3 border-b border-border bg-muted/40"
           >
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Registers
+              Editor
+            </span>
+            <span className="ml-2 text-[10px] text-muted-foreground/60">
+              M68K Assembly
             </span>
           </div>
-          <ScrollArea className="flex-1">
-            <RegisterDisplay cpuState={cpuState} />
-          </ScrollArea>
-        </aside>
-
-        <Separator orientation="vertical" className="bg-border" />
-
-        {/* Main panel — Memory Viewer */}
-        <main className="flex-1 flex flex-col min-w-0 bg-background">
-          <div
-            data-no-select
-            className="shrink-0 flex items-center h-7 px-3 border-b border-border bg-muted/40"
-          >
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Memory
-            </span>
+          <div className="flex-1 min-h-0 flex flex-col">
+            <CodeEditor ref={editorRef} onChange={handleEditorChange} />
           </div>
-          <MemoryViewer
-            className="flex-1 min-h-0"
-            onReadMemory={async (address, length) => {
-              const result = await EmulatorAPI.readMemory(address, length);
-              if (result.status === "success") return result.data;
-              throw new Error(result.error);
-            }}
-            initialAddress={memoryAddress}
-            displayLength={512}
-          />
-        </main>
+        </div>
+
+        {/* Right panel — tabbed */}
+        <div className="w-[340px] shrink-0 border-l border-border flex flex-col bg-card">
+          {/* Tab bar */}
+          <div data-no-select className="shrink-0 flex items-center h-7 border-b border-border bg-muted/40">
+            {(["registers", "memory", "uart"] as RightTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setRightTab(tab)}
+                className={`h-full px-3 text-[11px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${rightTab === tab
+                  ? "text-primary border-primary bg-background/50"
+                  : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/30"
+                  }`}
+              >
+                {tab === "uart" ? "UART" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === "uart" && uartOutput && (
+                  <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-[oklch(0.65_0.15_145)]" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {rightTab === "registers" && (
+              <ScrollArea className="flex-1">
+                <RegisterDisplay cpuState={cpuState} />
+              </ScrollArea>
+            )}
+
+            {rightTab === "memory" && (
+              <MemoryViewer
+                className="flex-1 min-h-0"
+                onReadMemory={async (address, length) => {
+                  const result = await EmulatorAPI.readMemory(address, length);
+                  if (result.status === "success") return result.data;
+                  throw new Error(result.error);
+                }}
+                initialAddress={memoryAddress}
+                displayLength={192}
+              />
+            )}
+
+            {rightTab === "uart" && (
+              <div className="flex-1 min-h-0 flex flex-col">
+                <UartTerminal
+                  output={uartOutput}
+                  onInput={sendUartChar}
+                  className="flex-1 min-h-0"
+                />
+                <div
+                  data-no-select
+                  className="shrink-0 flex items-center justify-between h-6 px-2 border-t border-border bg-muted/30"
+                >
+                  <span className="text-[10px] text-muted-foreground">
+                    {uartOutput.length} chars
+                  </span>
+                  <button
+                    onClick={clearUart}
+                    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Status bar */}
       <StatusBar
         status={status}
+        cpuState={cpuState}
         initialized={initialized}
-        error={error}
+        error={displayError}
+        loading={loading}
+        ledState={ledState}
       />
     </div>
   );
