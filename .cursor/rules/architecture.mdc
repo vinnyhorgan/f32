@@ -1,0 +1,28 @@
+---
+description: File layout and common workflows
+alwaysApply: true
+---
+
+# flux-32 — Architecture Quick Reference
+
+## File Map
+
+| Path | Purpose |
+|------|---------|
+| `src-tauri/src/lib.rs` | Tauri commands, IPC entry point |
+| `src-tauri/src/cpu.rs` | M68K CPU core |
+| `src-tauri/src/instructions.rs` | Instruction implementations |
+| `src/lib/emulator-api.ts` | Tauri `invoke()` wrappers |
+| `src/lib/emulator-types.ts` | TS types mirroring Rust |
+
+## Commands
+```bash
+npm run tauri dev    # Run app
+cargo test           # In src-tauri
+npm run lint         # Frontend
+```
+
+## MCP (if configured)
+- **tauri-mcp-server**: Inspect running app, DOM, IPC
+- **context7**: Docs and large-context help
+- **sequential-thinking**: Complex reasoning

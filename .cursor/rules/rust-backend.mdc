@@ -1,0 +1,35 @@
+---
+description: Rust backend conventions for src-tauri
+globs: src-tauri/**/*.rs
+alwaysApply: false
+---
+
+# Rust Backend Rules
+
+## Structure
+- All modules directly in `src-tauri/src/` — no nested dirs
+- `lib.rs`: Tauri commands and IPC bridge
+- Split only when a file exceeds ~800 lines
+
+## Style
+- Readability > cleverness. Assume reader is skilled but new to this project
+- Doc comments (`///`) on all public items
+- Explicit names: `execute_instruction` not `exec`, `AddressMode` not `AddrMode`
+- M68K abbreviations OK: PC, SR, SP
+
+## Adding a Tauri Command
+1. `#[tauri::command]` fn in `lib.rs`
+2. Register in `invoke_handler!`
+3. Add wrapper in `src/lib/emulator-api.ts`
+4. Add/update types in `src/lib/emulator-types.ts`
+
+## Testing
+- Unit tests in `#[cfg(test)] mod tests {}`
+- Musashi binaries in `src-tauri/test/*.bin` — run with `cargo test`
+- Run `cargo test` and `cargo clippy -- -D warnings` before commit
+
+## Avoid
+- `#[allow(...)]` without explanation
+- New crates without strong justification
+- Subdirectories under `src-tauri/src/`
+- Business logic in `lib.rs` (keep it thin)
