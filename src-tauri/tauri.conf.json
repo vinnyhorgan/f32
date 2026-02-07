@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "flux32",
-        "width": 1280,
-        "height": 720,
-        "minWidth": 1000,
-        "minHeight": 600,
+        "width": 960,
+        "height": 540,
+        "minWidth": 960,
+        "minHeight": 540,
         "resizable": true,
         "visible": false,
         "backgroundColor": "#16161e",
