@@ -1,0 +1,9 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://localhost:4000",
+    "ANTHROPIC_AUTH_TOKEN": "sk-github-proxy-token",
+    "CLAUDE_CODE_DISABLE_LOGIN_PROMPT": "1"
+  },
+  "apiKeyHelper": "echo sk-github-proxy-token",
+  "model": "github-sonnet"
+}

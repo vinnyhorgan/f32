@@ -1,0 +1,17 @@
+model_list:
+  - model_name: zai-glm
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet
+      api_base: https://api.z.ai/api/anthropic
+      api_key: "os.environ/ZAI_API_KEY"
+
+  - model_name: github-sonnet
+    litellm_params:
+      model: github_copilot/claude-sonnet-4.5
+  - model_name: github-opus
+    litellm_params:
+      model: github_copilot/claude-opus-4.6
+
+litellm_settings:
+  drop_params: true
+  set_completed_onboarding: true
