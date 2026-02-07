@@ -20,6 +20,7 @@ import { UartTerminal } from "./components/UartTerminal";
 import { useEmulatorStore } from "./lib/emulator-store";
 import { EmulatorAPI } from "./lib/emulator-api";
 import { ScrollArea } from "./components/ui/scroll-area";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type RightTab = "registers" | "memory" | "uart";
 
@@ -167,8 +168,29 @@ function App() {
 
   /** Initialize emulator on mount */
   useEffect(() => {
-    if (!initialized) init();
+    // Start backend initialization
+    if (!initialized) {
+      init().catch(console.error);
+    }
   }, [initialized, init]);
+
+  /** Show window after brief delay to ensure content is painted */
+  useEffect(() => {
+    // Show window safely
+    const win = getCurrentWindow();
+    const showWindow = async () => {
+      try {
+        await win.show();
+        await win.setFocus();
+      } catch (err) {
+        console.error("Failed to show window:", err);
+      }
+    };
+
+    // Small delay to ensure React has painted
+    const timer = setTimeout(showWindow, 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   /** Global keyboard shortcuts */
   useEffect(() => {

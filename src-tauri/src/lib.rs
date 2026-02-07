@@ -309,6 +309,24 @@ fn emulator_get_status() -> Result<EmulatorStatus, String> {
     }
 }
 
+fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use tauri_plugin_prevent_default::Flags;
+
+    let mut builder = tauri_plugin_prevent_default::Builder::new();
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.with_flags(Flags::all().difference(Flags::DEV_TOOLS | Flags::RELOAD));
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        builder = builder.with_flags(Flags::all());
+    }
+
+    builder.build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -318,6 +336,8 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_plugin_mcp_bridge::init());
     }
+
+    builder = builder.plugin(prevent_default());
 
     builder
         .invoke_handler(tauri::generate_handler![
