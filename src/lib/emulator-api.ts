@@ -256,14 +256,14 @@ export class EmulatorAPI {
       const address = options.address + i;
       const lineBytes = bytes.slice(i, i + bytesPerLine);
       const hexBytes = lineBytes
-        .map((b) => b.toString(16).toUpperCase().padStart(2, "0"))
+        .map((b) => b.toString(16).toLowerCase().padStart(2, "0"))
         .join(" ");
       const asciiBytes = lineBytes
         .map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : "."))
         .join("");
 
       lines.push(
-        `${address.toString(16).toUpperCase().padStart(6, "0")}:  ${hexBytes.padEnd(bytesPerLine * 3 - 1, " ")}  |${asciiBytes}|`,
+        `${address.toString(16).toLowerCase().padStart(6, "0")}:  ${hexBytes.padEnd(bytesPerLine * 3 - 1, " ")}  |${asciiBytes}|`,
       );
     }
 

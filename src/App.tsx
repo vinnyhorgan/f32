@@ -256,7 +256,7 @@ function App() {
           <span className="truncate">{displayError}</span>
           <button
             onClick={clearError}
-            className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wider"
+            className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors tracking-wider"
           >
             Dismiss
           </button>
@@ -271,7 +271,7 @@ function App() {
             data-no-select
             className="shrink-0 flex items-center h-7 px-3 border-b border-border bg-muted/40"
           >
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-muted-foreground tracking-wider">
               Editor
             </span>
             <span className="ml-2 text-[10px] text-muted-foreground/60">
@@ -291,12 +291,12 @@ function App() {
               <button
                 key={tab}
                 onClick={() => setRightTab(tab)}
-                className={`h-full px-3 text-[11px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${rightTab === tab
+                className={`h-full px-3 text-[11px] font-semibold tracking-wider transition-colors border-b-2 ${rightTab === tab
                   ? "text-primary border-primary bg-background/50"
                   : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/30"
                   }`}
               >
-                {tab === "uart" ? "UART" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab}
                 {tab === "uart" && uartOutput && (
                   <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-[oklch(0.65_0.15_145)]" />
                 )}

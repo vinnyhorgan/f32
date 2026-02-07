@@ -32,7 +32,7 @@ interface MemoryLine {
 
 /** Format a number as hex with zero-padding */
 function formatHex(value: number, digits: number = 8): string {
-  return value.toString(16).toUpperCase().padStart(digits, "0");
+  return value.toString(16).toLowerCase().padStart(digits, "0");
 }
 
 /** Convert bytes to ASCII representation (or . for non-printable) */
@@ -222,7 +222,7 @@ export function MemoryViewer({
         ) : (
           <table className="w-full border-collapse">
             <thead className="sticky top-0 bg-muted/60 backdrop-blur-sm z-10">
-              <tr className="text-[9px] font-mono text-muted-foreground uppercase">
+              <tr className="text-[9px] font-mono text-muted-foreground">
                 <th className="text-left px-2 py-1 font-medium w-[72px]">Address</th>
                 <th className="text-left px-1 py-1 font-medium">
                   {/* Hex column headers */}
@@ -235,7 +235,7 @@ export function MemoryViewer({
                           i > 0 && i % 4 === 0 ? "ml-2" : "ml-[3px]"
                         )}
                       >
-                        {i.toString(16).toUpperCase()}
+                        {i.toString(16).toLowerCase()}
                       </span>
                     ))}
                   </div>
@@ -249,10 +249,10 @@ export function MemoryViewer({
                   key={line.address}
                   className="hover:bg-accent/40 transition-colors"
                 >
-                  <td className="px-2 py-[1px] font-mono text-[11px] text-primary/80 whitespace-nowrap">
+                  <td className="px-2 py-px font-mono text-[11px] text-primary/80 whitespace-nowrap">
                     {formatHex(line.address)}
                   </td>
-                  <td className="px-1 py-[1px]">
+                  <td className="px-1 py-px">
                     <div className="flex">
                       {line.bytes.map((byte, i) => (
                         <span
@@ -272,7 +272,7 @@ export function MemoryViewer({
                       ))}
                     </div>
                   </td>
-                  <td className="px-2 py-[1px] font-mono text-[11px] text-emerald-500/70 whitespace-nowrap">
+                  <td className="px-2 py-px font-mono text-[11px] text-emerald-500/70 whitespace-nowrap">
                     {line.ascii}
                   </td>
                 </tr>

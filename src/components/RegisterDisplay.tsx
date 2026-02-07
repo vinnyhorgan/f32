@@ -18,7 +18,7 @@ interface RegisterDisplayProps {
 
 /** Format a number as hexadecimal with zero-padding */
 function formatHex(value: number, digits: number = 8): string {
-  return value.toString(16).toUpperCase().padStart(digits, "0");
+  return value.toString(16).toLowerCase().padStart(digits, "0");
 }
 
 /** Parse SR flags into individual flag booleans */
@@ -89,7 +89,7 @@ function RegisterRow({
 /** Compact section header */
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+    <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground tracking-widest">
       {children}
     </div>
   );
@@ -196,7 +196,7 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
       <div className="px-2 pb-2 pt-1">
         <span
           className={cn(
-            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider",
             flags.S
               ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
               : "bg-muted/50 text-muted-foreground/60 border border-transparent"

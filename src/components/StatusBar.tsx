@@ -80,7 +80,7 @@ export function StatusBar({ status, cpuState, initialized, error, loading }: Sta
                     <>
                         <Separator orientation="vertical" className="h-3.5 bg-border/60" />
                         <span className="font-mono text-[10px] px-1.5 text-emerald-500/80">
-                            PC ${cpuState.pc.toString(16).toUpperCase().padStart(6, "0")}
+                            PC ${cpuState.pc.toString(16).toLowerCase().padStart(6, "0")}
                         </span>
                     </>
                 )}

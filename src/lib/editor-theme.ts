@@ -14,41 +14,41 @@ import { tags } from "@lezer/highlight";
 export const flux32Theme = EditorView.theme(
     {
         "&": {
-            color: "oklch(0.9 0.005 260)",
-            backgroundColor: "oklch(0.13 0.005 260)",
+            color: "#c0caf5",
+            backgroundColor: "#16161e",
             fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', ui-monospace, monospace",
             fontSize: "13px",
             lineHeight: "1.55",
         },
         ".cm-content": {
-            caretColor: "oklch(0.65 0.18 250)",
+            caretColor: "#7aa2f7",
             padding: "8px 0",
         },
         ".cm-cursor, .cm-dropCursor": {
-            borderLeftColor: "oklch(0.65 0.18 250)",
+            borderLeftColor: "#7aa2f7",
             borderLeftWidth: "2px",
         },
         "&.cm-focused .cm-cursor": {
-            borderLeftColor: "oklch(0.75 0.18 250)",
+            borderLeftColor: "#7aa2f7",
         },
         ".cm-activeLine": {
-            backgroundColor: "oklch(0.18 0.008 260 / 0.5)",
+            backgroundColor: "#292e4280", // 50% opacity
         },
         ".cm-selectionMatch": {
-            backgroundColor: "oklch(0.35 0.05 250 / 0.3)",
+            backgroundColor: "#515c7e4d", // 30% opacity
         },
         "&.cm-focused .cm-selectionBackground, ::selection": {
-            backgroundColor: "oklch(0.3 0.08 250 / 0.4)",
+            backgroundColor: "#515c7e66", // 40% opacity
         },
         ".cm-gutters": {
-            backgroundColor: "oklch(0.14 0.005 260)",
-            color: "oklch(0.45 0.01 260)",
-            borderRight: "1px solid oklch(0.22 0.008 260)",
+            backgroundColor: "#16161e",
+            color: "#565f89",
+            borderRight: "1px solid #1a1b26",
             minWidth: "48px",
         },
         ".cm-activeLineGutter": {
-            backgroundColor: "oklch(0.18 0.008 260 / 0.5)",
-            color: "oklch(0.7 0.01 260)",
+            backgroundColor: "#292e4280",
+            color: "#7aa2f7",
         },
         ".cm-lineNumbers .cm-gutterElement": {
             padding: "0 8px 0 12px",
@@ -58,39 +58,39 @@ export const flux32Theme = EditorView.theme(
             padding: "0 4px",
         },
         ".cm-tooltip": {
-            backgroundColor: "oklch(0.17 0.008 260)",
-            border: "1px solid oklch(0.25 0.008 260)",
-            color: "oklch(0.9 0.005 260)",
+            backgroundColor: "#1a1b26",
+            border: "1px solid #292e42",
+            color: "#c0caf5",
         },
         ".cm-tooltip-autocomplete": {
             "& > ul > li": {
                 padding: "2px 8px",
             },
             "& > ul > li[aria-selected]": {
-                backgroundColor: "oklch(0.25 0.02 250)",
-                color: "oklch(0.95 0.005 260)",
+                backgroundColor: "#7aa2f7",
+                color: "#16161e",
             },
         },
         ".cm-panels": {
-            backgroundColor: "oklch(0.16 0.005 260)",
-            color: "oklch(0.85 0.005 260)",
+            backgroundColor: "#1a1b26",
+            color: "#c0caf5",
         },
         ".cm-panels.cm-panels-top": {
-            borderBottom: "1px solid oklch(0.25 0.008 260)",
+            borderBottom: "1px solid #292e42",
         },
         ".cm-panels.cm-panels-bottom": {
-            borderTop: "1px solid oklch(0.25 0.008 260)",
+            borderTop: "1px solid #292e42",
         },
         ".cm-searchMatch": {
-            backgroundColor: "oklch(0.45 0.15 80 / 0.3)",
-            outline: "1px solid oklch(0.55 0.15 80 / 0.5)",
+            backgroundColor: "#515c7e4d",
+            outline: "1px solid #7aa2f7",
         },
         ".cm-searchMatch.cm-searchMatch-selected": {
-            backgroundColor: "oklch(0.45 0.15 80 / 0.5)",
+            backgroundColor: "#515c7e80",
         },
         ".cm-matchingBracket": {
-            backgroundColor: "oklch(0.3 0.05 250 / 0.3)",
-            outline: "1px solid oklch(0.5 0.1 250 / 0.5)",
+            backgroundColor: "#515c7e4d",
+            outline: "1px solid #7aa2f7",
         },
     },
     { dark: true },
@@ -100,26 +100,26 @@ export const flux32Theme = EditorView.theme(
  * Syntax highlighting colors
  */
 export const flux32Highlight = HighlightStyle.define([
-    // Keywords / instructions / directives — blue
-    { tag: tags.keyword, color: "oklch(0.72 0.17 250)", fontWeight: "500" },
+    // Keywords / instructions / directives — Magenta / Purple
+    { tag: tags.keyword, color: "#bb9af7", fontWeight: "500" },
     // Comments — dim muted
-    { tag: tags.lineComment, color: "oklch(0.5 0.02 260)", fontStyle: "italic" },
-    { tag: tags.blockComment, color: "oklch(0.5 0.02 260)", fontStyle: "italic" },
-    // Strings — warm orange
-    { tag: tags.string, color: "oklch(0.75 0.15 55)" },
-    // Numbers — teal/cyan
-    { tag: tags.number, color: "oklch(0.78 0.14 175)" },
-    // Registers — special gold
-    { tag: tags.special(tags.variableName), color: "oklch(0.80 0.15 85)", fontWeight: "500" },
-    // Labels/identifiers — light foreground
-    { tag: tags.variableName, color: "oklch(0.85 0.03 260)" },
-    { tag: tags.labelName, color: "oklch(0.80 0.12 300)" },
-    // Operators
-    { tag: tags.operator, color: "oklch(0.7 0.1 250)" },
-    // Punctuation
-    { tag: tags.punctuation, color: "oklch(0.6 0.02 260)" },
-    { tag: tags.paren, color: "oklch(0.7 0.05 250)" },
-    { tag: tags.separator, color: "oklch(0.6 0.02 260)" },
+    { tag: tags.lineComment, color: "#565f89", fontStyle: "italic" },
+    { tag: tags.blockComment, color: "#565f89", fontStyle: "italic" },
+    // Strings — Green
+    { tag: tags.string, color: "#9ece6a" },
+    // Numbers — Orange
+    { tag: tags.number, color: "#ff9e64" },
+    // Registers — Yellow/Gold
+    { tag: tags.special(tags.variableName), color: "#e0af68", fontWeight: "500" },
+    // Labels/identifiers — Blue/Foreground
+    { tag: tags.variableName, color: "#c0caf5" },
+    { tag: tags.labelName, color: "#7dcfff" }, // Cyan for labels
+    // Operators — Cyan
+    { tag: tags.operator, color: "#89ddff" },
+    // Punctuation — Foreground
+    { tag: tags.punctuation, color: "#c0caf5" },
+    { tag: tags.paren, color: "#c0caf5" },
+    { tag: tags.separator, color: "#c0caf5" },
 ]);
 
 /**
