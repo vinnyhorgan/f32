@@ -9,7 +9,7 @@ Build the best possible GUI debugger and emulator experience to teach systems pr
 ## Architecture
 
 - **Backend (Rust)**: `src-tauri/src/`. Flat structure. No subdirectories. Minimal deps.
-- **Frontend (TS/React)**: `src/`. React 18, Tailwind v4, shadcn/ui.
+- **Frontend (TS/React)**: `src/`. React 19, Tailwind v4, shadcn/ui, Vite 7.
 - **Communication**: Exclusive use of Tauri IPC commands (`invoke()`) defined in `lib.rs` and wrapped in `EmulatorAPI`.
 
 ## Commands

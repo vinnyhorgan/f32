@@ -7,7 +7,7 @@
  * Highlights registers that changed since last update.
  */
 
-import { useRef, useEffect } from "react";
+import * as React from "react";
 import type { CpuState } from "../lib/emulator-types";
 import { cn } from "../lib/utils";
 
@@ -116,17 +116,23 @@ function getChangedSet(prev: CpuState | null, curr: CpuState): Set<string> {
 
 /** Main RegisterDisplay component */
 export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
-  const prevStateRef = useRef<CpuState | null>(null);
-  const changedRef = useRef<Set<string>>(new Set());
+  // Track previous state for change detection using a custom hook pattern
+  const [prevState, setPrevState] = React.useState<CpuState | null>(null);
 
-  useEffect(() => {
+  // Compute changed set based on current vs previous state
+  const changed = React.useMemo(() => {
+    if (!cpuState) return new Set<string>();
+    return getChangedSet(prevState, cpuState);
+  }, [cpuState, prevState]);
+
+  // Update previous state after render
+  React.useEffect(() => {
     if (cpuState) {
-      changedRef.current = getChangedSet(prevStateRef.current, cpuState);
-      prevStateRef.current = {
+      setPrevState({
         ...cpuState,
         d: [...cpuState.d],
         a: [...cpuState.a],
-      };
+      });
     }
   }, [cpuState]);
 
@@ -140,7 +146,6 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
 
   const flags = parseFlags(cpuState.sr);
   const interruptMask = (cpuState.sr >> 8) & 0x7;
-  const changed = changedRef.current;
 
   return (
     <div className={cn("flex min-w-0 flex-col overflow-auto", className)}>

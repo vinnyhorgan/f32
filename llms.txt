@@ -1,0 +1,106 @@
+# flux-32
+
+> An educational M68K (Motorola 68000) emulator desktop application built with Tauri v2 and React.
+
+## Overview
+
+flux-32 is a GUI debugger and emulator designed to teach systems programming. It provides a modern desktop experience for learning assembly language and computer architecture concepts.
+
+## Tech Stack
+
+- **Desktop Framework**: Tauri 2 (Rust backend + webview frontend)
+- **Frontend**: React 19, TypeScript, Tailwind CSS v4
+- **State Management**: Zustand
+- **UI Components**: Radix UI primitives + Shadcn/ui
+- **Code Editor**: CodeMirror 6 with M68K syntax highlighting
+- **Build Tool**: Vite 7 (Rolldown-powered)
+- **Testing**: Vitest + Testing Library
+
+## Architecture
+
+### Backend (Rust)
+- Location: `src-tauri/src/`
+- Structure: Flat module layout (no subdirectories)
+- Entry point: `lib.rs` contains all Tauri command definitions
+- Emulator core: Musashi M68K emulator integration
+
+### Frontend (TypeScript/React)
+- Location: `src/`
+- API Layer: `src/lib/emulator-api.ts` (all backend communication)
+- Types: `src/lib/emulator-types.ts` (shared type definitions)
+- State: `src/lib/emulator-store.ts` (Zustand store)
+- Components: `src/components/` (React components)
+
+### Communication
+- Tauri IPC commands via `invoke()`
+- All commands defined in `lib.rs` and wrapped in `EmulatorAPI`
+
+## Key Files
+
+- `src-tauri/src/lib.rs` - Tauri commands and app setup
+- `src-tauri/src/emu.rs` - Emulator state and operations
+- `src-tauri/src/musashi.rs` - M68K CPU bindings
+- `src-tauri/src/asm.rs` - Assembler integration
+- `src/lib/emulator-api.ts` - Frontend API wrapper
+- `src/lib/emulator-store.ts` - Application state
+- `src/components/CodeEditor.tsx` - Assembly code editor
+- `src/components/RegisterDisplay.tsx` - CPU register view
+- `src/components/MemoryViewer.tsx` - Memory inspection
+- `src/components/Toolbar.tsx` - Control buttons
+- `src/components/StatusBar.tsx` - Status display
+
+## Commands
+
+```bash
+# Development
+pnpm tauri dev          # Start dev server with hot reload
+pnpm dev                # Frontend only
+
+# Building
+pnpm tauri build        # Build release binary
+
+# Testing
+pnpm test               # Run frontend tests (watch mode)
+pnpm test:run           # Run frontend tests once
+cd src-tauri && cargo test -- --test-threads=1  # Backend tests
+
+# Quality
+pnpm check              # Full quality check (lint + format + test)
+pnpm lint               # ESLint + TypeScript check
+pnpm format             # Prettier + Taplo formatting
+```
+
+## Code Style
+
+### Rust
+- Run `cargo fmt` before committing
+- Must pass `cargo clippy -- -D warnings`
+- Public items require doc comments
+- Unit tests in `#[cfg(test)] mod tests {}`
+
+### TypeScript
+- Strict TypeScript (no `any` types)
+- ESLint with zero warnings tolerance
+- Prettier formatting enforced
+- Conventional Commits required
+
+## Adding Features
+
+### New Tauri Command
+1. Define in `src-tauri/src/lib.rs`: `#[tauri::command] fn my_command(...) -> Result<T, String>`
+2. Register in `invoke_handler!` macro
+3. Add to `src/lib/emulator-api.ts`: `static async myCommand(...)`
+4. Define types in `src/lib/emulator-types.ts`
+
+### New UI Component
+1. Use shadcn: `npx shadcn@latest add [name]`
+2. Or create: `src/components/[Name].tsx`
+3. Use Tailwind classes for styling
+4. Use `useEmulatorStore` for state
+
+## Documentation
+
+- Agent workflows: `.agent/workflows/`
+- Agent skills: `.agent/skills/`
+- Agent rules: `.agent/rules/`
+- Project context: `CLAUDE.md`
