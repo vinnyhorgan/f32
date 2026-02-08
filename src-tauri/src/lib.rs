@@ -69,14 +69,6 @@
 #![allow(clippy::verbose_bit_mask)]
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
-// Allow static mutable references - legacy pattern for Tauri IPC.
-// This will be migrated to `std::sync::OnceLock` in a future refactor.
-// All access is single-threaded through the main Tauri event loop.
-#![allow(
-    static_mut_refs,
-    reason = "Legacy Tauri IPC pattern - will migrate to OnceLock"
-)]
-
 // Core emulator modules
 mod addressing;
 mod assembler;
@@ -93,24 +85,15 @@ mod uart;
 use sbc::Sbc;
 use std::sync::{Arc, Mutex};
 
-/// The Flux32 emulator state - wrapped in Arc<Mutex<>> for thread safety
+/// The Flux32 emulator state - wrapped in `Arc<Mutex<>>` for thread safety
 ///
-/// NOTE: The unsafe Send/Sync impls below assert this is safe for single-threaded
-/// Tauri IPC access. Sbc uses Rc<`RefCell`<>> internally but is only accessed on
-/// the main thread through the Tauri event loop.
-#[allow(
-    clippy::arc_with_non_send_sync,
-    reason = "Manual Send/Sync impls below"
-)]
+/// The SBC now uses `Arc<Mutex<>>` internally, making it `Send + Sync` automatically.
+/// `Flux32Emulator` wraps this in another `Arc<Mutex<>>` for Tauri IPC access.
 pub struct Flux32Emulator {
     sbc: Arc<Mutex<Sbc>>,
 }
 
 impl Flux32Emulator {
-    #[allow(
-        clippy::arc_with_non_send_sync,
-        reason = "Manual Send/Sync impls on Flux32Emulator"
-    )]
     fn new() -> Self {
         Self {
             sbc: Arc::new(Mutex::new(Sbc::new())),
@@ -118,7 +101,7 @@ impl Flux32Emulator {
     }
 
     /// Execute a single instruction step
-    fn step(&mut self) -> Result<(), String> {
+    fn step(&self) -> Result<(), String> {
         self.sbc.lock().unwrap().step();
         Ok(())
     }
@@ -163,103 +146,92 @@ pub struct EmulatorStatus {
     executed: u64,
 }
 
-// SAFETY: We assert that Flux32Emulator is Send + Sync since it's Arc<Mutex<Sbc>>
-// The SBC itself uses Rc<RefCell<>> internally but is only accessed on the main thread
-unsafe impl Send for Flux32Emulator {}
-unsafe impl Sync for Flux32Emulator {}
-
-/// Global emulator state.
+/// Global emulator state using Mutex for thread-safe access.
 ///
-/// NOTE: This uses a mutable static which triggers Rust 2024 compatibility warnings.
-/// This pattern is used for simplicity in the Tauri IPC layer where all access is
-/// single-threaded through the main event loop. A future refactor should migrate to
-/// `std::sync::OnceLock` for improved safety and edition compatibility.
-static mut EMULATOR: Option<Flux32Emulator> = None;
-static INIT: std::sync::Once = std::sync::Once::new();
+/// The Mutex provides thread-safe access to the emulator instance. All access
+/// is single-threaded through the main Tauri event loop, but Mutex ensures
+/// safety if the pattern changes in the future.
+static EMULATOR: std::sync::Mutex<Option<Flux32Emulator>> = std::sync::Mutex::new(None);
 
 /// Initialize a new emulator instance
 #[tauri::command]
 fn emulator_init() -> Result<String, String> {
-    INIT.call_once(|| unsafe {
-        EMULATOR = Some(Flux32Emulator::new());
-    });
+    let mut emulator = EMULATOR.lock().unwrap();
+    if emulator.is_none() {
+        *emulator = Some(Flux32Emulator::new());
+    }
     Ok("Emulator initialized".to_string())
 }
 
 /// Execute a single instruction step
 #[tauri::command]
 fn emulator_step() -> Result<String, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_mut() {
-            emulator.step()?;
-            Ok("Step executed".to_string())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        emulator.step()?;
+        Ok("Step executed".to_string())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Get the current CPU register state
 #[tauri::command]
 fn emulator_get_registers() -> Result<CpuState, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_ref() {
-            Ok(emulator.get_cpu_state())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        Ok(emulator.get_cpu_state())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Read a byte from memory at the given address
 #[tauri::command]
 fn emulator_read_byte(address: u32) -> Result<u8, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_ref() {
-            let sbc = emulator.sbc.lock().unwrap();
-            sbc.cpu()
-                .memory
-                .read_byte(address)
-                .map_err(|e| e.to_string())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let sbc = emulator.sbc.lock().unwrap();
+        sbc.cpu()
+            .memory
+            .read_byte(address)
+            .map_err(|e| e.to_string())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Read a block of bytes from memory
 #[tauri::command]
 fn emulator_read_memory(address: u32, length: usize) -> Result<Vec<u8>, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_ref() {
-            let sbc = emulator.sbc.lock().unwrap();
-            (0..length)
-                .map(|i| {
-                    sbc.cpu()
-                        .memory
-                        .read_byte(address + i as u32)
-                        .map_err(|e| e.to_string())
-                })
-                .collect()
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let sbc = emulator.sbc.lock().unwrap();
+        (0..length)
+            .map(|i| {
+                sbc.cpu()
+                    .memory
+                    .read_byte(address + i as u32)
+                    .map_err(|e| e.to_string())
+            })
+            .collect()
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Write a byte to memory at the given address
 #[tauri::command]
 fn emulator_write_byte(address: u32, value: u8) -> Result<(), String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_mut() {
-            let mut sbc = emulator.sbc.lock().unwrap();
-            sbc.cpu_mut()
-                .memory
-                .write_byte(address, value)
-                .map_err(|e| e.to_string())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let mut sbc = emulator.sbc.lock().unwrap();
+        sbc.cpu_mut()
+            .memory
+            .write_byte(address, value)
+            .map_err(|e| e.to_string())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
@@ -281,100 +253,93 @@ fn emulator_assemble_and_load(code: String) -> Result<String, String> {
     if binary.is_empty() {
         return Err("Assembly produced no output".to_string());
     }
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_mut() {
-            let mut sbc = emulator.sbc.lock().unwrap();
-            sbc.load_app(&binary);
-            sbc.run_app();
-            Ok(format!("Loaded {} bytes at $E00100", binary.len()))
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let mut sbc = emulator.sbc.lock().unwrap();
+        sbc.load_app(&binary);
+        sbc.run_app();
+        Ok(format!("Loaded {} bytes at $E00100", binary.len()))
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Read UART output (drain output buffer)
 #[tauri::command]
 fn emulator_read_uart() -> Result<Vec<u8>, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_mut() {
-            let mut sbc = emulator.sbc.lock().unwrap();
-            Ok(sbc.drain_output())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let mut sbc = emulator.sbc.lock().unwrap();
+        Ok(sbc.drain_output())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Write a character to UART RX (simulate keyboard input)
 #[tauri::command]
 fn emulator_write_uart(byte: u8) -> Result<(), String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_mut() {
-            let mut sbc = emulator.sbc.lock().unwrap();
-            sbc.send_char(byte);
-            Ok(())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let mut sbc = emulator.sbc.lock().unwrap();
+        sbc.send_char(byte);
+        Ok(())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Get the LED state
 #[tauri::command]
 fn emulator_get_led() -> Result<bool, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_ref() {
-            let sbc = emulator.sbc.lock().unwrap();
-            Ok(sbc.led_state())
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let sbc = emulator.sbc.lock().unwrap();
+        Ok(sbc.led_state())
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Reset the emulator to initial state
 #[tauri::command]
 fn emulator_reset() -> Result<String, String> {
-    unsafe {
-        EMULATOR = Some(Flux32Emulator::new());
-        Ok("Emulator reset".to_string())
-    }
+    let mut emulator = EMULATOR.lock().unwrap();
+    *emulator = Some(Flux32Emulator::new());
+    Ok("Emulator reset".to_string())
 }
 
 /// Run the emulator continuously
 #[tauri::command]
 fn emulator_run(max_cycles: Option<u64>) -> Result<EmulatorStatus, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_mut() {
-            let cycles = max_cycles.unwrap_or(100_000);
-            let mut sbc = emulator.sbc.lock().unwrap();
-            let executed = sbc.run(cycles);
-            Ok(EmulatorStatus {
-                halted: sbc.is_halted(),
-                cycles: sbc.cycles(),
-                executed,
-            })
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let cycles = max_cycles.unwrap_or(100_000);
+        let mut sbc = emulator.sbc.lock().unwrap();
+        let executed = sbc.run(cycles);
+        Ok(EmulatorStatus {
+            halted: sbc.is_halted(),
+            cycles: sbc.cycles(),
+            executed,
+        })
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 
 /// Get emulator status (halted, cycles, etc.)
 #[tauri::command]
 fn emulator_get_status() -> Result<EmulatorStatus, String> {
-    unsafe {
-        if let Some(emulator) = EMULATOR.as_ref() {
-            let sbc = emulator.sbc.lock().unwrap();
-            Ok(EmulatorStatus {
-                halted: sbc.is_halted(),
-                cycles: sbc.cycles(),
-                executed: 0,
-            })
-        } else {
-            Err("Emulator not initialized".to_string())
-        }
+    let emulator = EMULATOR.lock().unwrap();
+    if let Some(emulator) = emulator.as_ref() {
+        let sbc = emulator.sbc.lock().unwrap();
+        Ok(EmulatorStatus {
+            halted: sbc.is_halted(),
+            cycles: sbc.cycles(),
+            executed: 0,
+        })
+    } else {
+        Err("Emulator not initialized".to_string())
     }
 }
 

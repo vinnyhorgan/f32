@@ -687,4 +687,132 @@ mod tests {
         assert_eq!(mem.read_byte(0x100).unwrap(), 0x00);
         assert_eq!(mem.read_byte(0x101).unwrap(), 0xBB);
     }
+
+    #[test]
+    fn test_word_read_at_boundary() {
+        let mut mem = Memory::new(1024);
+        // Write at the last valid even address for word read
+        mem.write_byte(0x3FC, 0xAA).unwrap();
+        mem.write_byte(0x3FD, 0xBB).unwrap();
+        let result = mem.read_word(0x3FC).unwrap();
+        assert_eq!(result, 0xAABB);
+    }
+
+    #[test]
+    fn test_long_read_at_boundary() {
+        let mut mem = Memory::new(1024);
+        // Write at the last valid aligned address for long read
+        mem.write_byte(0x3FC, 0x11).unwrap();
+        mem.write_byte(0x3FD, 0x22).unwrap();
+        mem.write_byte(0x3FE, 0x33).unwrap();
+        mem.write_byte(0x3FF, 0x44).unwrap();
+        let result = mem.read_long(0x3FC).unwrap();
+        assert_eq!(result, 0x11223344);
+    }
+
+    #[test]
+    fn test_word_write_at_boundary() {
+        let mut mem = Memory::new(1024);
+        // Write word at the last valid even address
+        mem.write_word(0x3FE, 0xAABB).unwrap();
+        assert_eq!(mem.read_byte(0x3FE).unwrap(), 0xAA);
+        assert_eq!(mem.read_byte(0x3FF).unwrap(), 0xBB);
+    }
+
+    #[test]
+    fn test_long_write_at_boundary() {
+        let mut mem = Memory::new(1024);
+        // Write long at the last valid aligned address
+        mem.write_long(0x3FC, 0x11223344).unwrap();
+        assert_eq!(mem.read_byte(0x3FC).unwrap(), 0x11);
+        assert_eq!(mem.read_byte(0x3FD).unwrap(), 0x22);
+        assert_eq!(mem.read_byte(0x3FE).unwrap(), 0x33);
+        assert_eq!(mem.read_byte(0x3FF).unwrap(), 0x44);
+    }
+
+    #[test]
+    fn test_word_read_past_boundary() {
+        let mut mem = Memory::new(1024);
+        // Word read that goes past memory boundary should fail
+        let result = mem.read_word(0x3FF);
+        assert!(matches!(result, Err(MemoryError::AddressOutOfRange { .. })));
+    }
+
+    #[test]
+    fn test_long_read_past_boundary() {
+        let mut mem = Memory::new(1024);
+        // Long read that goes past memory boundary should fail
+        let result = mem.read_long(0x3FD);
+        assert!(matches!(result, Err(MemoryError::AddressOutOfRange { .. })));
+    }
+
+    #[test]
+    fn test_word_write_past_boundary() {
+        let mut mem = Memory::new(1024);
+        // Word write that goes past memory boundary should fail
+        let result = mem.write_word(0x3FF, 0xAABB);
+        assert!(matches!(result, Err(MemoryError::AddressOutOfRange { .. })));
+    }
+
+    #[test]
+    fn test_long_write_past_boundary() {
+        let mut mem = Memory::new(1024);
+        // Long write that goes past memory boundary should fail
+        let result = mem.write_long(0x3FD, 0x11223344);
+        assert!(matches!(result, Err(MemoryError::AddressOutOfRange { .. })));
+    }
+
+    #[test]
+    fn test_load_binary_empty() {
+        let mut mem = Memory::new(1024);
+        let data: Vec<u8> = vec![];
+        let count = mem.load_binary(0x100, &data).unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_load_binary_at_zero() {
+        let mut mem = Memory::new(1024);
+        let data = vec![0x01, 0x02, 0x03];
+        let count = mem.load_binary(0, &data).unwrap();
+        assert_eq!(count, 3);
+        assert_eq!(mem.read_byte(0).unwrap(), 0x01);
+        assert_eq!(mem.read_byte(1).unwrap(), 0x02);
+        assert_eq!(mem.read_byte(2).unwrap(), 0x03);
+    }
+
+    #[test]
+    fn test_read_hook_with_multiple_addresses() {
+        let mut mem = Memory::new(1024);
+        mem.write_byte(0x100, 0xAA).unwrap();
+        mem.write_byte(0x200, 0xBB).unwrap();
+        mem.write_byte(0x300, 0xCC).unwrap();
+
+        mem.set_read_hook(|address| match address {
+            0x100 => Some(0x55),
+            0x200 => Some(0x66),
+            _ => None,
+        });
+
+        assert_eq!(mem.read_byte(0x100).unwrap(), 0x55);
+        assert_eq!(mem.read_byte(0x200).unwrap(), 0x66);
+        assert_eq!(mem.read_byte(0x300).unwrap(), 0xCC); // Not hooked
+    }
+
+    #[test]
+    fn test_write_hook_with_multiple_addresses() {
+        let mut mem = Memory::new(1024);
+        mem.set_write_hook(|address, _value, _size| match address {
+            0x100 | 0x200 => WriteHookResult::Handled,
+            _ => WriteHookResult::Unhandled,
+        });
+
+        mem.write_byte(0x100, 0xAA).unwrap();
+        mem.write_byte(0x200, 0xBB).unwrap();
+        mem.write_byte(0x300, 0xCC).unwrap();
+
+        assert_eq!(mem.read_byte(0x100).unwrap(), 0x00); // Blocked
+        assert_eq!(mem.read_byte(0x200).unwrap(), 0x00); // Blocked
+        assert_eq!(mem.read_byte(0x300).unwrap(), 0xCC); // Not blocked
+    }
 }

@@ -60,10 +60,9 @@ use crate::cfcard::CfCard;
 use crate::cpu::Cpu;
 use crate::memory::{OperandSize, WriteHookResult};
 use crate::uart::Uart16550;
-use std::cell::RefCell;
 use std::io;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 /// SBC clock frequency in Hz (12 MHz)
 pub const CLOCK_HZ: u32 = 12_000_000;
@@ -96,31 +95,28 @@ static EMBEDDED_ROM: &[u8] = include_bytes!("../assets/rom.bin");
 // System variable addresses (in RAM at E00000)
 // These must be initialized before running apps directly without ROM boot
 const OUTCH_VEC: u32 = 0x00E0_0000;
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Reserved for future ROM compatibility")]
 const INCH_VEC: u32 = 0x00E0_0004;
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Reserved for future ROM compatibility")]
 const HEXDIGITS_VEC: u32 = 0x00E0_0008;
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Reserved for future ROM compatibility")]
 const SEPARATORS_VEC: u32 = 0x00E0_000C;
 
 // ROM addresses for I/O routines (determined from rom.lst)
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Kept for ROM debugging and future CLI tools")]
 const UART_OUTCHAR_ADDR: u32 = 0x0000_1186;
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Kept for ROM debugging and future CLI tools")]
 const UART_INCHAR_ADDR: u32 = 0x0000_1198;
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Kept for ROM debugging and future CLI tools")]
 const HEXDIGITS_UC_ADDR: u32 = 0x0000_14EE;
 // SEPARATORS value: hyphen, colon, comma, null
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Kept for ROM debugging and future CLI tools")]
 const SEPARATORS_VALUE: u32 = 0x2d3a_2c00;
 
-// Global peripheral pointers for MMIO hooks (replaces thread-locals)
-// Safety: These pointers are only dereferenced while holding the SBC mutex,
-// ensuring exclusive access. They point to RefCells owned by the Sbc struct.
-use std::sync::atomic::{AtomicPtr, Ordering};
-
-static SBC_UART_PTR: AtomicPtr<RefCell<Uart16550>> = AtomicPtr::new(std::ptr::null_mut());
-static SBC_CFCARD_PTR: AtomicPtr<RefCell<CfCard>> = AtomicPtr::new(std::ptr::null_mut());
+// Global peripheral references for MMIO hooks
+// These are Arc clones of the peripherals owned by the Sbc struct.
+static SBC_UART_PTR: Mutex<Option<Arc<Mutex<Uart16550>>>> = Mutex::new(None);
+static SBC_CFCARD_PTR: Mutex<Option<Arc<Mutex<CfCard>>>> = Mutex::new(None);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SbcAddressRegion {
@@ -168,20 +164,20 @@ fn decode_address(address: u32) -> SbcAddressRegion {
 fn sbc_read_hook(address: u32) -> Option<u8> {
     match decode_address(address) {
         SbcAddressRegion::Uart(offset) => {
-            let ptr = SBC_UART_PTR.load(Ordering::Acquire);
-            if ptr.is_null() {
-                return Some(0xFF);
+            let uart_guard = SBC_UART_PTR.lock().unwrap();
+            if let Some(uart) = uart_guard.as_ref() {
+                Some(uart.lock().unwrap().read(offset))
+            } else {
+                Some(0xFF)
             }
-            let uart = unsafe { &*ptr };
-            Some(uart.borrow_mut().read(offset))
         }
         SbcAddressRegion::CfCard(offset) => {
-            let ptr = SBC_CFCARD_PTR.load(Ordering::Acquire);
-            if ptr.is_null() {
-                return Some(0xFF);
+            let cf_guard = SBC_CFCARD_PTR.lock().unwrap();
+            if let Some(cf) = cf_guard.as_ref() {
+                Some(cf.lock().unwrap().read(offset))
+            } else {
+                Some(0xFF)
             }
-            let cf = unsafe { &*ptr };
-            Some(cf.borrow_mut().read(offset))
         }
         SbcAddressRegion::OpenBus | SbcAddressRegion::Conflict => Some(0xFF),
         SbcAddressRegion::Rom(_) | SbcAddressRegion::Ram(_) => None,
@@ -192,44 +188,44 @@ fn sbc_read_hook(address: u32) -> Option<u8> {
 fn sbc_write_hook(address: u32, value: u32, size: OperandSize) -> WriteHookResult {
     match decode_address(address) {
         SbcAddressRegion::Uart(offset) => {
-            let ptr = SBC_UART_PTR.load(Ordering::Acquire);
-            if !ptr.is_null() {
-                let uart = unsafe { &*ptr };
+            let uart_guard = SBC_UART_PTR.lock().unwrap();
+            if let Some(uart) = uart_guard.as_ref() {
+                let mut uart = uart.lock().unwrap();
                 match size {
                     OperandSize::Byte => {
-                        uart.borrow_mut().write(offset, value as u8);
+                        uart.write(offset, value as u8);
                     }
                     OperandSize::Word => {
-                        uart.borrow_mut().write(offset, (value >> 8) as u8);
-                        uart.borrow_mut().write(offset + 1, value as u8);
+                        uart.write(offset, (value >> 8) as u8);
+                        uart.write(offset + 1, value as u8);
                     }
                     OperandSize::Long => {
-                        uart.borrow_mut().write(offset, (value >> 24) as u8);
-                        uart.borrow_mut().write(offset + 1, (value >> 16) as u8);
-                        uart.borrow_mut().write(offset + 2, (value >> 8) as u8);
-                        uart.borrow_mut().write(offset + 3, value as u8);
+                        uart.write(offset, (value >> 24) as u8);
+                        uart.write(offset + 1, (value >> 16) as u8);
+                        uart.write(offset + 2, (value >> 8) as u8);
+                        uart.write(offset + 3, value as u8);
                     }
                 }
             }
             WriteHookResult::Handled
         }
         SbcAddressRegion::CfCard(offset) => {
-            let ptr = SBC_CFCARD_PTR.load(Ordering::Acquire);
-            if !ptr.is_null() {
-                let cf = unsafe { &*ptr };
+            let cf_guard = SBC_CFCARD_PTR.lock().unwrap();
+            if let Some(cf) = cf_guard.as_ref() {
+                let mut cf = cf.lock().unwrap();
                 match size {
                     OperandSize::Byte => {
-                        cf.borrow_mut().write(offset, value as u8);
+                        cf.write(offset, value as u8);
                     }
                     OperandSize::Word => {
-                        cf.borrow_mut().write(offset, (value >> 8) as u8);
-                        cf.borrow_mut().write(offset + 1, value as u8);
+                        cf.write(offset, (value >> 8) as u8);
+                        cf.write(offset + 1, value as u8);
                     }
                     OperandSize::Long => {
-                        cf.borrow_mut().write(offset, (value >> 24) as u8);
-                        cf.borrow_mut().write(offset + 1, (value >> 16) as u8);
-                        cf.borrow_mut().write(offset + 2, (value >> 8) as u8);
-                        cf.borrow_mut().write(offset + 3, value as u8);
+                        cf.write(offset, (value >> 24) as u8);
+                        cf.write(offset + 1, (value >> 16) as u8);
+                        cf.write(offset + 2, (value >> 8) as u8);
+                        cf.write(offset + 3, value as u8);
                     }
                 }
             }
@@ -253,9 +249,9 @@ pub struct Sbc {
     /// The CPU core (uses 16MB flat memory for simplicity)
     cpu: Cpu,
     /// UART peripheral
-    uart: Rc<RefCell<Uart16550>>,
+    uart: Arc<Mutex<Uart16550>>,
     /// `CompactFlash` card
-    cfcard: Rc<RefCell<CfCard>>,
+    cfcard: Arc<Mutex<CfCard>>,
     /// ROM data (for read interception)
     rom_data: Vec<u8>,
     /// UART output buffer (auto-drained from TX FIFO)
@@ -272,8 +268,8 @@ impl Sbc {
     /// Creates a new SBC instance with embedded ROM pre-loaded
     #[must_use]
     pub fn new() -> Self {
-        let uart = Rc::new(RefCell::new(Uart16550::new()));
-        let cfcard = Rc::new(RefCell::new(CfCard::new()));
+        let uart = Arc::new(Mutex::new(Uart16550::new()));
+        let cfcard = Arc::new(Mutex::new(CfCard::new()));
 
         // Create CPU with full 16MB address space
         let mut cpu = Cpu::with_memory_size(16 * 1024 * 1024);
@@ -283,10 +279,9 @@ impl Sbc {
         // Install read hook for MMIO
         cpu.memory_mut().set_read_hook(sbc_read_hook);
 
-        // Register peripherals in global atomic pointers
-        // Safety: These are only dereferenced while holding the SBC mutex
-        SBC_UART_PTR.store(Rc::as_ptr(&uart).cast_mut(), Ordering::Release);
-        SBC_CFCARD_PTR.store(Rc::as_ptr(&cfcard).cast_mut(), Ordering::Release);
+        // Register peripherals in global Arc<Mutex<>> references
+        *SBC_UART_PTR.lock().unwrap() = Some(Arc::clone(&uart));
+        *SBC_CFCARD_PTR.lock().unwrap() = Some(Arc::clone(&cfcard));
 
         // Initialize CPU for supervisor mode
         cpu.set_sr(0x2700); // Supervisor mode, interrupts masked
@@ -336,7 +331,7 @@ impl Sbc {
         self.cpu.set_sr(0x2700); // Supervisor mode, all interrupts masked
 
         // Reset UART
-        self.uart.borrow_mut().reset();
+        self.uart.lock().unwrap().reset();
         self.uart_output.clear();
     }
 
@@ -419,23 +414,23 @@ impl Sbc {
 
     /// Loads a `CompactFlash` disk image
     pub fn load_cf_image(&mut self, path: &Path) -> io::Result<()> {
-        self.cfcard.borrow_mut().load_image(path)
+        self.cfcard.lock().unwrap().load_image(path)
     }
 
     /// Loads a `CompactFlash` disk image from bytes
     pub fn load_cf_bytes(&mut self, data: &[u8]) {
-        self.cfcard.borrow_mut().load_bytes(data);
+        self.cfcard.lock().unwrap().load_bytes(data);
     }
 
     /// Ejects the `CompactFlash` card
     pub fn eject_cf(&mut self) {
-        self.cfcard.borrow_mut().eject();
+        self.cfcard.lock().unwrap().eject();
     }
 
     /// Returns true if a CF card is inserted
     #[must_use]
     pub fn cf_inserted(&self) -> bool {
-        self.cfcard.borrow().is_inserted()
+        self.cfcard.lock().unwrap().is_inserted()
     }
 
     /// Loads an application binary into RAM at $E00100
@@ -612,14 +607,14 @@ impl Sbc {
 
     /// Gets a reference to the UART for terminal I/O
     #[must_use]
-    pub fn uart(&self) -> Rc<RefCell<Uart16550>> {
-        Rc::clone(&self.uart)
+    pub fn uart(&self) -> Arc<Mutex<Uart16550>> {
+        Arc::clone(&self.uart)
     }
 
     /// Gets a reference to the CF card
     #[must_use]
-    pub fn cfcard(&self) -> Rc<RefCell<CfCard>> {
-        Rc::clone(&self.cfcard)
+    pub fn cfcard(&self) -> Arc<Mutex<CfCard>> {
+        Arc::clone(&self.cfcard)
     }
 
     /// Returns true if the CPU is halted
@@ -643,7 +638,7 @@ impl Sbc {
     /// Returns the LED state from UART MCR
     #[must_use]
     pub fn led_state(&self) -> bool {
-        self.uart.borrow().led_state()
+        self.uart.lock().unwrap().led_state()
     }
 
     /// Returns total cycles executed
@@ -654,14 +649,14 @@ impl Sbc {
 
     /// Sends a character to the UART receive buffer (from terminal)
     pub fn send_char(&mut self, ch: u8) {
-        self.uart.borrow_mut().push_rx(ch);
+        self.uart.lock().unwrap().push_rx(ch);
     }
 
     /// Receives a character from the UART transmit buffer (to terminal)
     /// Drains from the accumulated output buffer first, then checks TX FIFO.
     pub fn recv_char(&mut self) -> Option<u8> {
         if self.uart_output.is_empty() {
-            self.uart.borrow_mut().pop_tx()
+            self.uart.lock().unwrap().pop_tx()
         } else {
             Some(self.uart_output.remove(0))
         }
@@ -669,12 +664,12 @@ impl Sbc {
 
     /// Sends a break condition to enter the serial loader
     pub fn send_break(&mut self) {
-        self.uart.borrow_mut().send_break();
+        self.uart.lock().unwrap().send_break();
     }
 
     /// Sets the button state
     pub fn set_button(&mut self, pressed: bool) {
-        self.uart.borrow_mut().set_button(pressed);
+        self.uart.lock().unwrap().set_button(pressed);
     }
 
     /// Executes a single instruction
@@ -690,7 +685,7 @@ impl Sbc {
 
     /// Drains the UART TX FIFO into the output buffer
     fn drain_uart_tx(&mut self) {
-        while let Some(byte) = self.uart.borrow_mut().pop_tx() {
+        while let Some(byte) = self.uart.lock().unwrap().pop_tx() {
             self.uart_output.push(byte);
         }
     }
@@ -707,7 +702,7 @@ impl Sbc {
 
     /// Handles interrupt delivery from peripherals.
     fn handle_interrupts(&mut self) {
-        let uart_pending = self.uart.borrow().interrupt_pending();
+        let uart_pending = self.uart.lock().unwrap().interrupt_pending();
         if !uart_pending {
             return;
         }
@@ -716,7 +711,7 @@ impl Sbc {
         let current_ipl = ((self.cpu.sr() >> 8) & 0x7) as u8;
         if 1 > current_ipl {
             self.cpu.service_autovector_interrupt(1);
-            self.uart.borrow_mut().clear_interrupt();
+            self.uart.lock().unwrap().clear_interrupt();
         }
     }
 
