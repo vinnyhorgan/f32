@@ -1,0 +1,60 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Explicit text files
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+
+# Source code
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.rs text eol=lf
+*.asm text eol=lf
+*.inc text eol=lf
+
+# Config files
+*.prettierrc text eol=lf
+*.eslintrc text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# Binary files - do not modify
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.bin binary
+*.exe binary
+*.dll binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Archives
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+
+# Diff behavior - show better diffs for these
+*.rs diff=rust
+*.md diff=markdown
+*.ts linguist-language=TypeScript
+*.tsx linguist-language=TypeScript

@@ -1,10 +1,25 @@
+# Build outputs
 dist
 node_modules
 .docusaurus
 .cache
 coverage
+
+# Rust - handled by cargo fmt
 src-tauri/target
 src-tauri/gen
-src-tauri/src/instructions.rs
+src-tauri/src
+
+# Lock files
 pnpm-lock.yaml
+
+# Assembly - handled by custom formatter
 src-tauri/rom
+
+# Binary files
+*.bin
+*.exe
+*.dll
+
+# Generated schemas
+src-tauri/gen/schemas
