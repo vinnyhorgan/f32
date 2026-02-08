@@ -38,7 +38,9 @@ export interface EmulatorStatus {
 /**
  * Result type for emulator operations
  */
-export type EmulatorResult<T> = { status: "success"; data: T } | { status: "error"; error: string };
+export type EmulatorResult<T> =
+  | { status: "success"; data: T }
+  | { status: "error"; error: string };
 
 /**
  * Emulator command responses
@@ -63,7 +65,10 @@ export interface EmulatorCommands {
   emulator_read_byte: (address: number) => Promise<EmulatorResult<number>>;
 
   /** Write a byte to memory at the given address */
-  emulator_write_byte: (address: number, value: number) => Promise<EmulatorResult<null>>;
+  emulator_write_byte: (
+    address: number,
+    value: number,
+  ) => Promise<EmulatorResult<null>>;
 
   /** Assemble M68K assembly code */
   emulator_assemble: (code: string) => Promise<EmulatorResult<number[]>>;

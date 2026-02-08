@@ -94,15 +94,17 @@ export function MemoryViewer({
         setLoading(false);
       }
     },
-    [onReadMemory, displayLength]
+    [onReadMemory, displayLength],
   );
 
-  const goToPreviousPage = () => loadMemory(Math.max(0, currentAddress - displayLength));
+  const goToPreviousPage = () =>
+    loadMemory(Math.max(0, currentAddress - displayLength));
   const goToNextPage = () => {
     const next = currentAddress + displayLength;
     if (next <= 0xffffff - displayLength) loadMemory(next);
   };
-  const goToPreviousLine = () => loadMemory(Math.max(0, currentAddress - BYTES_PER_LINE));
+  const goToPreviousLine = () =>
+    loadMemory(Math.max(0, currentAddress - BYTES_PER_LINE));
   const goToNextLine = () => {
     const next = currentAddress + BYTES_PER_LINE;
     if (next <= 0xffffff - displayLength) loadMemory(next);
@@ -123,28 +125,38 @@ export function MemoryViewer({
   }, [initialAddress, loadMemory]);
 
   return (
-    <div className={cn("flex flex-col h-full min-w-0", className)}>
+    <div className={cn("flex h-full min-w-0 flex-col", className)}>
       {/* Toolbar row */}
       <div
         data-no-select
-        className="flex flex-col gap-1 px-2 py-1 border-b border-border bg-muted/30 shrink-0"
+        className="border-border bg-muted/30 flex shrink-0 flex-col gap-1 border-b px-2 py-1"
       >
         <div className="flex items-center gap-1.5">
-          <form onSubmit={handleAddressSubmit} className="flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground font-mono">$</span>
+          <form
+            onSubmit={handleAddressSubmit}
+            className="flex items-center gap-1"
+          >
+            <span className="text-muted-foreground font-mono text-[10px]">
+              $
+            </span>
             <input
               type="text"
               value={addressInput}
               onChange={(e) => setAddressInput(e.target.value)}
-              className="w-20 px-1.5 py-0.5 text-[11px] font-mono bg-background border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="bg-background border-border text-foreground focus:ring-ring w-20 rounded border px-1.5 py-0.5 font-mono text-[11px] focus:ring-1 focus:outline-none"
               placeholder="Address"
             />
-            <Button type="submit" size="xs" variant="secondary" className="h-5 px-1.5 text-[10px]">
+            <Button
+              type="submit"
+              size="xs"
+              variant="secondary"
+              className="h-5 px-1.5 text-[10px]"
+            >
               Go
             </Button>
           </form>
 
-          <div className="flex items-center gap-0.5 ml-auto">
+          <div className="ml-auto flex items-center gap-0.5">
             <Button
               size="icon-xs"
               variant="ghost"
@@ -188,15 +200,15 @@ export function MemoryViewer({
           {[
             { label: "ROM", addr: 0x000000 },
             { label: "Vectors", addr: 0x000080 },
-            { label: "UART", addr: 0xA00000 },
-            { label: "RAM", addr: 0xC00000 },
-            { label: "App", addr: 0xE00100 },
+            { label: "UART", addr: 0xa00000 },
+            { label: "RAM", addr: 0xc00000 },
+            { label: "App", addr: 0xe00100 },
           ].map(({ label, addr }) => (
             <Button
               key={label}
               size="xs"
               variant={currentAddress === addr ? "secondary" : "ghost"}
-              className="h-4 px-1.5 text-[9px] font-mono"
+              className="h-4 px-1.5 font-mono text-[9px]"
               onClick={() => loadMemory(addr)}
               disabled={loading}
             >
@@ -208,23 +220,25 @@ export function MemoryViewer({
 
       {/* Error banner */}
       {error && (
-        <div className="px-2 py-1 bg-destructive/10 text-destructive text-[10px] border-b border-destructive/20">
+        <div className="bg-destructive/10 text-destructive border-destructive/20 border-b px-2 py-1 text-[10px]">
           {error}
         </div>
       )}
 
       {/* Hex dump table */}
-      <div className="flex-1 overflow-auto bg-background">
+      <div className="bg-background flex-1 overflow-auto">
         {lines.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
             {loading ? "Loading..." : "No data"}
           </div>
         ) : (
           <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-muted/60 backdrop-blur-sm z-10">
-              <tr className="text-[9px] font-mono text-muted-foreground">
-                <th className="text-left px-2 py-1 font-medium w-[72px]">Address</th>
-                <th className="text-left px-1 py-1 font-medium">
+            <thead className="bg-muted/60 sticky top-0 z-10 backdrop-blur-sm">
+              <tr className="text-muted-foreground font-mono text-[9px]">
+                <th className="w-[72px] px-2 py-1 text-left font-medium">
+                  Address
+                </th>
+                <th className="px-1 py-1 text-left font-medium">
                   {/* Hex column headers */}
                   <div className="flex">
                     {Array.from({ length: BYTES_PER_LINE }, (_, i) => (
@@ -232,7 +246,7 @@ export function MemoryViewer({
                         key={i}
                         className={cn(
                           "w-[18px] text-center",
-                          i > 0 && i % 4 === 0 ? "ml-2" : "ml-[3px]"
+                          i > 0 && i % 4 === 0 ? "ml-2" : "ml-[3px]",
                         )}
                       >
                         {i.toString(16).toLowerCase()}
@@ -240,7 +254,7 @@ export function MemoryViewer({
                     ))}
                   </div>
                 </th>
-                <th className="text-left px-2 py-1 font-medium">ASCII</th>
+                <th className="px-2 py-1 text-left font-medium">ASCII</th>
               </tr>
             </thead>
             <tbody>
@@ -249,7 +263,7 @@ export function MemoryViewer({
                   key={line.address}
                   className="hover:bg-accent/40 transition-colors"
                 >
-                  <td className="px-2 py-px font-mono text-[11px] text-primary/80 whitespace-nowrap">
+                  <td className="text-primary/80 px-2 py-px font-mono text-[11px] whitespace-nowrap">
                     {formatHex(line.address)}
                   </td>
                   <td className="px-1 py-px">
@@ -264,7 +278,7 @@ export function MemoryViewer({
                               ? "text-muted-foreground/20"
                               : byte === 0xff
                                 ? "text-muted-foreground/40"
-                                : "text-foreground/90"
+                                : "text-foreground/90",
                           )}
                         >
                           {formatHex(byte, 2)}
@@ -272,7 +286,7 @@ export function MemoryViewer({
                       ))}
                     </div>
                   </td>
-                  <td className="px-2 py-px font-mono text-[11px] text-emerald-500/70 whitespace-nowrap">
+                  <td className="px-2 py-px font-mono text-[11px] whitespace-nowrap text-emerald-500/70">
                     {line.ascii}
                   </td>
                 </tr>
@@ -285,10 +299,11 @@ export function MemoryViewer({
       {/* Bottom address range */}
       <div
         data-no-select
-        className="shrink-0 flex items-center justify-between px-2 py-0.5 border-t border-border bg-muted/30 text-[10px] text-muted-foreground font-mono"
+        className="border-border bg-muted/30 text-muted-foreground flex shrink-0 items-center justify-between border-t px-2 py-0.5 font-mono text-[10px]"
       >
         <span>
-          ${formatHex(currentAddress)}-${formatHex(currentAddress + displayLength - 1)}
+          ${formatHex(currentAddress)}-$
+          {formatHex(currentAddress + displayLength - 1)}
         </span>
         <span>{displayLength} bytes</span>
       </div>

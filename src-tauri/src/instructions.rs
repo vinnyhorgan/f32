@@ -122,12 +122,12 @@ impl Instructions {
     /// Moves data from source to destination.
     ///
     /// # Encoding
-    /// ```
+    /// ```text
     /// 15  14  13  12  11  10   9   8   7   6   5   4   3   2   1   0
     /// | size |   0 | 0 | 1 |           register             |  mode  |
     /// |              destination (mode + register)             |
     /// |              source (mode + register)                  |
-    /// ```
+    /// ```text
     ///
     /// # Flags
     /// - N: Set if result is negative
@@ -196,10 +196,10 @@ impl Instructions {
     /// Moves a sign-extended 8-bit immediate to a data register.
     ///
     /// # Encoding
-    /// ```
+    /// ```text
     /// 15  14  13  12  11  10   9   8   7   6   5   4   3   2   1   0
     /// | 0 | 1 | 1 | 1 |               data                |  0 | reg |
-    /// ```
+    /// ```text
     /// Pattern: 0111 0xxx xxxx xxxx
     ///
     /// # Flags

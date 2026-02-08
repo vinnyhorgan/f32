@@ -327,6 +327,7 @@ fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     builder.build()
 }
 
+/// Main entry point for the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();

@@ -69,7 +69,9 @@ export class EmulatorAPI {
    * Run the emulator continuously
    * @param maxCycles Maximum number of cycles to execute (default: 100000)
    */
-  static async run(maxCycles?: number): Promise<EmulatorResult<EmulatorStatus>> {
+  static async run(
+    maxCycles?: number,
+  ): Promise<EmulatorResult<EmulatorStatus>> {
     try {
       const result = await invoke<EmulatorStatus>("emulator_run", {
         maxCycles,
@@ -187,7 +189,9 @@ export class EmulatorAPI {
    */
   static async assembleAndLoad(code: string): Promise<EmulatorResult<string>> {
     try {
-      const result = await invoke<string>("emulator_assemble_and_load", { code });
+      const result = await invoke<string>("emulator_assemble_and_load", {
+        code,
+      });
       return { status: "success", data: result };
     } catch (error) {
       return {

@@ -1,0 +1,10 @@
+dist
+node_modules
+.docusaurus
+.cache
+coverage
+src-tauri/target
+src-tauri/gen
+src-tauri/src/instructions.rs
+pnpm-lock.yaml
+src-tauri/rom

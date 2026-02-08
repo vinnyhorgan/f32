@@ -158,13 +158,16 @@ function App() {
     await pollUart();
   }, [step, pollUart]);
 
-  const handleLoadExample = useCallback((name: string) => {
-    const code = EXAMPLES[name];
-    if (code && editorRef.current) {
-      editorRef.current.setContent(code);
-      setSourceCode(code);
-    }
-  }, [setSourceCode]);
+  const handleLoadExample = useCallback(
+    (name: string) => {
+      const code = EXAMPLES[name];
+      if (code && editorRef.current) {
+        editorRef.current.setContent(code);
+        setSourceCode(code);
+      }
+    },
+    [setSourceCode],
+  );
 
   /** Initialize emulator on mount */
   useEffect(() => {
@@ -226,16 +229,35 @@ function App() {
           break;
         default:
           if (e.ctrlKey && e.shiftKey) {
-            if (e.code === "Digit1") { e.preventDefault(); setRightTab("registers"); }
-            if (e.code === "Digit2") { e.preventDefault(); setRightTab("memory"); }
-            if (e.code === "Digit3") { e.preventDefault(); setRightTab("uart"); }
+            if (e.code === "Digit1") {
+              e.preventDefault();
+              setRightTab("registers");
+            }
+            if (e.code === "Digit2") {
+              e.preventDefault();
+              setRightTab("memory");
+            }
+            if (e.code === "Digit3") {
+              e.preventDefault();
+              setRightTab("uart");
+            }
           }
           break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [loading, handleAssembleAndRun, handleStep, handleRun, reset, refresh, error, assemblyError, clearError]);
+  }, [
+    loading,
+    handleAssembleAndRun,
+    handleStep,
+    handleRun,
+    reset,
+    refresh,
+    error,
+    assemblyError,
+    clearError,
+  ]);
 
   const handleEditorChange = useCallback(
     (value: string) => {
@@ -247,7 +269,7 @@ function App() {
   const displayError = assemblyError || error;
 
   return (
-    <div className="h-screen w-full flex flex-col overflow-hidden bg-background text-foreground">
+    <div className="bg-background text-foreground flex h-screen w-full flex-col overflow-hidden">
       {/* Menu bar */}
       <AppMenuBar
         isRunning={loading}
@@ -274,11 +296,11 @@ function App() {
 
       {/* Error banner */}
       {displayError && (
-        <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-destructive/10 border-b border-destructive/20 text-destructive text-xs font-mono">
+        <div className="bg-destructive/10 border-destructive/20 text-destructive flex shrink-0 items-center justify-between border-b px-3 py-1.5 font-mono text-xs">
           <span className="truncate">{displayError}</span>
           <button
             onClick={clearError}
-            className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:text-foreground transition-colors tracking-wider"
+            className="text-muted-foreground hover:text-foreground ml-2 shrink-0 text-[10px] tracking-wider transition-colors"
           >
             Dismiss
           </button>
@@ -286,48 +308,52 @@ function App() {
       )}
 
       {/* Main content: Editor (left) + Panels (right) */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex min-h-0 flex-1">
         {/* Left — Code Editor */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col">
           <div
             data-no-select
-            className="shrink-0 flex items-center h-7 px-3 border-b border-border bg-muted/40"
+            className="border-border bg-muted/40 flex h-7 shrink-0 items-center border-b px-3"
           >
-            <span className="text-[11px] font-semibold text-muted-foreground tracking-wider">
+            <span className="text-muted-foreground text-[11px] font-semibold tracking-wider">
               Editor
             </span>
-            <span className="ml-2 text-[10px] text-muted-foreground/60">
+            <span className="text-muted-foreground/60 ml-2 text-[10px]">
               M68K Assembly
             </span>
           </div>
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <CodeEditor ref={editorRef} onChange={handleEditorChange} />
           </div>
         </div>
 
         {/* Right panel — tabbed */}
-        <div className="w-[340px] shrink-0 border-l border-border flex flex-col bg-card">
+        <div className="border-border bg-card flex w-[340px] shrink-0 flex-col border-l">
           {/* Tab bar */}
-          <div data-no-select className="shrink-0 flex items-center h-7 border-b border-border bg-muted/40">
+          <div
+            data-no-select
+            className="border-border bg-muted/40 flex h-7 shrink-0 items-center border-b"
+          >
             {(["registers", "memory", "uart"] as RightTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setRightTab(tab)}
-                className={`h-full px-3 text-[11px] font-semibold tracking-wider transition-colors border-b-2 ${rightTab === tab
-                  ? "text-primary border-primary bg-background/50"
-                  : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/30"
-                  }`}
+                className={`h-full border-b-2 px-3 text-[11px] font-semibold tracking-wider transition-colors ${
+                  rightTab === tab
+                    ? "text-primary border-primary bg-background/50"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30 border-transparent"
+                }`}
               >
                 {tab}
                 {tab === "uart" && uartOutput && (
-                  <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-[oklch(0.65_0.15_145)]" />
+                  <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[oklch(0.65_0.15_145)]" />
                 )}
               </button>
             ))}
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             {rightTab === "registers" && (
               <ScrollArea className="flex-1">
                 <RegisterDisplay cpuState={cpuState} />
@@ -336,7 +362,7 @@ function App() {
 
             {rightTab === "memory" && (
               <MemoryViewer
-                className="flex-1 min-h-0"
+                className="min-h-0 flex-1"
                 onReadMemory={async (address, length) => {
                   const result = await EmulatorAPI.readMemory(address, length);
                   if (result.status === "success") return result.data;
@@ -348,22 +374,22 @@ function App() {
             )}
 
             {rightTab === "uart" && (
-              <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex min-h-0 flex-1 flex-col">
                 <UartTerminal
                   output={uartOutput}
                   onInput={sendUartChar}
-                  className="flex-1 min-h-0"
+                  className="min-h-0 flex-1"
                 />
                 <div
                   data-no-select
-                  className="shrink-0 flex items-center justify-between h-6 px-2 border-t border-border bg-muted/30"
+                  className="border-border bg-muted/30 flex h-6 shrink-0 items-center justify-between border-t px-2"
                 >
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-muted-foreground text-[10px]">
                     {uartOutput.length} chars
                   </span>
                   <button
                     onClick={clearUart}
-                    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-[10px] transition-colors"
                   >
                     Clear
                   </button>

@@ -38,10 +38,10 @@ function FlagBadge({ label, active }: { label: string; active: boolean }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold font-mono transition-colors",
+        "inline-flex h-5 w-5 items-center justify-center rounded font-mono text-[10px] font-bold transition-colors",
         active
-          ? "bg-primary/20 text-primary border border-primary/30"
-          : "bg-muted/50 text-muted-foreground/40 border border-transparent"
+          ? "bg-primary/20 text-primary border-primary/30 border"
+          : "bg-muted/50 text-muted-foreground/40 border border-transparent",
       )}
     >
       {label}
@@ -70,13 +70,13 @@ function RegisterRow({
     : "text-foreground/60";
 
   return (
-    <div className="flex items-center gap-2 px-2 py-[3px] rounded-sm hover:bg-accent/50 transition-colors group">
-      <span className="text-[11px] font-mono font-semibold text-muted-foreground w-7 shrink-0">
+    <div className="hover:bg-accent/50 group flex items-center gap-2 rounded-sm px-2 py-[3px] transition-colors">
+      <span className="text-muted-foreground w-7 shrink-0 font-mono text-[11px] font-semibold">
         {label}
       </span>
       <span
         className={cn(
-          "text-[12px] font-mono tracking-wider transition-colors duration-300",
+          "font-mono text-[12px] tracking-wider transition-colors duration-300",
           colorClass,
         )}
       >
@@ -89,7 +89,7 @@ function RegisterRow({
 /** Compact section header */
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground tracking-widest">
+    <div className="text-muted-foreground px-2 pt-2 pb-1 text-[10px] font-semibold tracking-widest">
       {children}
     </div>
   );
@@ -122,13 +122,17 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
   useEffect(() => {
     if (cpuState) {
       changedRef.current = getChangedSet(prevStateRef.current, cpuState);
-      prevStateRef.current = { ...cpuState, d: [...cpuState.d], a: [...cpuState.a] };
+      prevStateRef.current = {
+        ...cpuState,
+        d: [...cpuState.d],
+        a: [...cpuState.a],
+      };
     }
   }, [cpuState]);
 
   if (!cpuState) {
     return (
-      <div className={cn("p-4 text-xs text-muted-foreground", className)}>
+      <div className={cn("text-muted-foreground p-4 text-xs", className)}>
         No CPU state available
       </div>
     );
@@ -139,7 +143,7 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
   const changed = changedRef.current;
 
   return (
-    <div className={cn("flex flex-col min-w-0 overflow-auto", className)}>
+    <div className={cn("flex min-w-0 flex-col overflow-auto", className)}>
       {/* Data Registers */}
       <SectionHeader>Data</SectionHeader>
       <div className="grid grid-cols-2 gap-x-1">
@@ -169,10 +173,28 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
       {/* Special Registers */}
       <SectionHeader>System</SectionHeader>
       <div className="grid grid-cols-1 gap-x-1">
-        <RegisterRow label="PC" value={formatHex(cpuState.pc)} changed={changed.has("PC")} highlight="green" />
-        <RegisterRow label="SR" value={formatHex(cpuState.sr, 4)} changed={changed.has("SR")} highlight="amber" />
-        <RegisterRow label="USP" value={formatHex(cpuState.usp)} changed={changed.has("USP")} />
-        <RegisterRow label="SSP" value={formatHex(cpuState.ssp)} changed={changed.has("SSP")} />
+        <RegisterRow
+          label="PC"
+          value={formatHex(cpuState.pc)}
+          changed={changed.has("PC")}
+          highlight="green"
+        />
+        <RegisterRow
+          label="SR"
+          value={formatHex(cpuState.sr, 4)}
+          changed={changed.has("SR")}
+          highlight="amber"
+        />
+        <RegisterRow
+          label="USP"
+          value={formatHex(cpuState.usp)}
+          changed={changed.has("USP")}
+        />
+        <RegisterRow
+          label="SSP"
+          value={formatHex(cpuState.ssp)}
+          changed={changed.has("SSP")}
+        />
       </div>
 
       {/* Flags */}
@@ -181,25 +203,27 @@ export function RegisterDisplay({ cpuState, className }: RegisterDisplayProps) {
         {(["X", "N", "Z", "V", "C"] as const).map((flag) => (
           <FlagBadge key={flag} label={flag} active={flags[flag]} />
         ))}
-        <div className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+        <div className="text-muted-foreground ml-auto flex items-center gap-1.5 font-mono text-[10px]">
           <span>IPL</span>
-          <span className={cn(
-            "font-semibold",
-            interruptMask > 0 ? "text-amber-400" : "text-muted-foreground/50"
-          )}>
+          <span
+            className={cn(
+              "font-semibold",
+              interruptMask > 0 ? "text-amber-400" : "text-muted-foreground/50",
+            )}
+          >
             {interruptMask}
           </span>
         </div>
       </div>
 
       {/* Mode badge */}
-      <div className="px-2 pb-2 pt-1">
+      <div className="px-2 pt-1 pb-2">
         <span
           className={cn(
-            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider",
+            "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider",
             flags.S
-              ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
-              : "bg-muted/50 text-muted-foreground/60 border border-transparent"
+              ? "border border-purple-500/20 bg-purple-500/15 text-purple-400"
+              : "bg-muted/50 text-muted-foreground/60 border border-transparent",
           )}
         >
           {flags.S ? "Supervisor" : "User"}

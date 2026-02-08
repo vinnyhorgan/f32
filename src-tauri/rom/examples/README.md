@@ -37,6 +37,7 @@ flux32 --run ../rom.bin --app ../disk.img
 **Difficulty**: ⭐ Beginner
 
 A minimal "Hello World" program demonstrating:
+
 - Including the system headers (`app.inc`)
 - Using system calls (`sys` macro)
 - Waiting for button input (`WaitBtn`)
@@ -45,6 +46,7 @@ A minimal "Hello World" program demonstrating:
 - Infinite loops
 
 **Source**:
+
 ```asm
         include    "../app.inc"
 
@@ -58,18 +60,21 @@ str:    dc.b       "Hello from Flux32!\n",0
 ```
 
 **What it does**:
+
 1. Waits for you to press the virtual button (Ctrl+B in terminal mode)
 2. Toggles the LED indicator
 3. Prints "Hello from Flux32!" to the UART
 4. Loops forever
 
 **Learning Points**:
+
 - System call invocation via TRAP
 - LEA instruction for loading addresses
 - Infinite loops with BRA
 - Null-terminated strings
 
 **Try It**:
+
 ```bash
 flux32 --vasm -m68000 -Fbin -o hello.bin hello.asm
 flux32 --run ../rom.bin --app hello.bin
@@ -83,6 +88,7 @@ flux32 --run ../rom.bin --app hello.bin
 **Difficulty**: ⭐⭐ Intermediate
 
 The classic FizzBuzz programming challenge, demonstrating:
+
 - Integer arithmetic (DIVU)
 - Modulo operations (remainder via SWAP)
 - Conditional logic (branches)
@@ -91,12 +97,13 @@ The classic FizzBuzz programming challenge, demonstrating:
 - Delay loops
 
 **Source Walkthrough**:
+
 ```asm
 start:  sys        WaitBtn
         moveq      #1,d3           ; Counter starting at 1
 
 .loop:  moveq      #0,d2           ; Flag for "printed something"
-        
+
         ; Check divisible by 3
         move.l     d3,d0
         divu.w     #3,d0           ; Divide by 3
@@ -106,7 +113,7 @@ start:  sys        WaitBtn
         litstr     "Fizz"
         sys        OutStr
         addq.w     #1,d2           ; Mark that we printed
-        
+
 .1:     ; Check divisible by 5
         move.l     d3,d0
         divu.w     #5,d0           ; Divide by 5
@@ -116,7 +123,7 @@ start:  sys        WaitBtn
         litstr     "Buzz"
         sys        OutStr
         addq       #1,d2           ; Mark that we printed
-        
+
 .2:     ; If flag not set, print the number
         tst.w      d2
         bne        .3
@@ -124,7 +131,7 @@ start:  sys        WaitBtn
         litstr     FMT_U16,0       ; Push format string
         sys        OutFmt          ; Print number
         addq       #2,sp           ; Clean up stack
-        
+
 .3:     moveq      #$0a,d0         ; Newline
         sys        OutChar
         addq       #1,d3           ; Increment counter
@@ -135,6 +142,7 @@ start:  sys        WaitBtn
 ```
 
 **What it does**:
+
 1. Counts from 1 to infinity
 2. Prints "Fizz" for multiples of 3
 3. Prints "Buzz" for multiples of 5
@@ -143,6 +151,7 @@ start:  sys        WaitBtn
 6. Toggles LED and delays between iterations
 
 **Learning Points**:
+
 - DIVU (unsigned division) instruction
 - Using SWAP to access remainder from DIVU
 - TST instruction for testing zero
@@ -152,6 +161,7 @@ start:  sys        WaitBtn
 - BSR/RTS for subroutines
 
 **Try It**:
+
 ```bash
 flux32 --vasm -m68000 -Fbin -o fizzbuzz.bin fizzbuzz.asm
 flux32 --run ../rom.bin --app fizzbuzz.bin
@@ -165,6 +175,7 @@ flux32 --run ../rom.bin --app fizzbuzz.bin
 **Difficulty**: ⭐⭐⭐ Advanced
 
 A beautiful LED fade animation using pulse-width modulation (PWM), demonstrating:
+
 - Nested loops
 - LED control macros
 - PWM technique (duty cycle)
@@ -172,6 +183,7 @@ A beautiful LED fade animation using pulse-width modulation (PWM), demonstrating
 - DBRA instruction (decrement and branch)
 
 **Source Walkthrough**:
+
 ```asm
 fadespeed equ 6
 
@@ -179,30 +191,31 @@ animate_led:
         moveq      #0,d1            ; Duty cycle (0-255)
         moveq      #fadespeed,d2    ; Periods per duty cycle
         led_on
-        
+
 .cycle: move.l     #255,d0          ; 255 iterations per period
         led_tgl                     ; Start period with toggle
-        
+
 .loop:  cmp.b      d0,d1            ; Is count == duty cycle?
         bne        .1
         led_tgl                     ; Invert LED at duty cycle point
-        
+
 .1:     dbra       d0,.loop         ; 255 iterations (one PWM period)
         dbra       d2,.cycle        ; Repeat period several times
-        
+
         ; Move to next duty cycle
         addq       #1,d1
-        
+
         ; At 0, invert waveform (fade up -> fade down)
         cmp.b      #0,d1
         bne        .2
         led_tgl
-        
+
 .2:     moveq      #fadespeed,d2
         bra        .cycle
 ```
 
 **What it does**:
+
 1. Generates a PWM waveform on the LED pin
 2. Gradually increases duty cycle (0% → 100%)
 3. LED appears to smoothly fade brighter
@@ -211,6 +224,7 @@ animate_led:
 6. Repeats forever in a breathing pattern
 
 **Learning Points**:
+
 - PWM technique for analog-like output from digital pins
 - DBRA instruction (very efficient for loops)
 - Nested loop structures
@@ -221,6 +235,7 @@ animate_led:
 **How PWM Works**:
 
 Each PWM period (256 iterations):
+
 ```
 Duty Cycle 25%:  ░░░░░░██████████████████████
 Duty Cycle 50%:  ░░░░░░░░░░░░░░██████████████
@@ -230,6 +245,7 @@ Duty Cycle 75%:  ░░░░░░░░░░░░░░░░░░░░█
 By repeating this pattern quickly, human eyes perceive varying brightness.
 
 **Try It**:
+
 ```bash
 flux32 --vasm -m68000 -Fbin -o idle.bin idle.asm
 flux32 --run ../rom.bin --app idle.bin
@@ -255,17 +271,20 @@ data:   dc.b       "Hello!",0
 ### Key Macros
 
 **System Calls**:
+
 ```asm
 sys <name>              ; Invoke syscall (TRAP)
 ```
 
 **Inline Strings**:
+
 ```asm
 litstr "text"           ; Embed string, A0 points to it
 litstr FMT_U16,0        ; Format specifier
 ```
 
 **LED Control**:
+
 ```asm
 led_on                  ; Turn LED on (DTR low)
 led_off                 ; Turn LED off (DTR high)
@@ -273,12 +292,14 @@ led_tgl                 ; Toggle LED state
 ```
 
 **Register Push/Pop**:
+
 ```asm
 pushm d0-d2/a0-a1       ; Save registers
 popm d0-d2/a0-a1        ; Restore registers
 ```
 
 **Branch and Link**:
+
 ```asm
 bl subroutine           ; Call subroutine (BSR)
 rl                      ; Return from subroutine (RTS)
@@ -286,23 +307,23 @@ rl                      ; Return from subroutine (RTS)
 
 ### Available System Calls
 
-| Syscall | Macro | Arguments | Description |
-|---------|-------|-----------|-------------|
-| TRAP 0 | `sys Exit` | - | Exit to shell |
-| TRAP 1 | `sys WaitBtn` | - | Wait for button press/release |
-| TRAP 2 | `sys OutChar` | D0.B | Write character to UART |
-| TRAP 3 | `sys OutStr` | A0 | Write null-terminated string |
-| TRAP 4 | `sys OutFmt` | A0, stack | Printf-style formatting |
-| TRAP 5 | `sys InChar` | → D0.B | Read character from UART |
-| TRAP 6 | `sys PromptStr` | A0, D0.W | Prompt and read string |
-| TRAP 7 | `sys ReadSector` | D0.L, A0 | Read CF sector |
-| TRAP 8 | `sys ListDirectory` | A0, D0.L | Iterate directory |
-| TRAP 9 | `sys FindFile` | A0, A1 | Find file by name |
-| TRAP 10 | `sys ReadFile` | A0, A1 | Read entire file |
-| TRAP 11 | `sys GetDateTime` | A0 | Read RTC |
-| TRAP 12 | `sys SetDateTime` | A0 | Set RTC |
-| TRAP 13 | `sys GetSysInfo` | → A0 | Get system info |
-| TRAP 15 | `sys Breakpoint` | - | Trigger debugger |
+| Syscall | Macro               | Arguments | Description                   |
+| ------- | ------------------- | --------- | ----------------------------- |
+| TRAP 0  | `sys Exit`          | -         | Exit to shell                 |
+| TRAP 1  | `sys WaitBtn`       | -         | Wait for button press/release |
+| TRAP 2  | `sys OutChar`       | D0.B      | Write character to UART       |
+| TRAP 3  | `sys OutStr`        | A0        | Write null-terminated string  |
+| TRAP 4  | `sys OutFmt`        | A0, stack | Printf-style formatting       |
+| TRAP 5  | `sys InChar`        | → D0.B    | Read character from UART      |
+| TRAP 6  | `sys PromptStr`     | A0, D0.W  | Prompt and read string        |
+| TRAP 7  | `sys ReadSector`    | D0.L, A0  | Read CF sector                |
+| TRAP 8  | `sys ListDirectory` | A0, D0.L  | Iterate directory             |
+| TRAP 9  | `sys FindFile`      | A0, A1    | Find file by name             |
+| TRAP 10 | `sys ReadFile`      | A0, A1    | Read entire file              |
+| TRAP 11 | `sys GetDateTime`   | A0        | Read RTC                      |
+| TRAP 12 | `sys SetDateTime`   | A0        | Set RTC                       |
+| TRAP 13 | `sys GetSysInfo`    | → A0      | Get system info               |
+| TRAP 15 | `sys Breakpoint`    | -         | Trigger debugger              |
 
 See [../README.md](../README.md) for complete syscall documentation.
 
@@ -326,6 +347,7 @@ addq       #6,sp               ; 2+4 bytes
 ```
 
 Available formats:
+
 - `FMT_U8`, `FMT_U16`, `FMT_U32` - Unsigned decimal
 - `FMT_S8`, `FMT_S16`, `FMT_S32` - Signed decimal
 - `FMT_X8`, `FMT_X16`, `FMT_X32` - Hexadecimal
@@ -357,6 +379,7 @@ Functions should follow these rules:
 - Caller cleans up stack
 
 Example:
+
 ```asm
 ; Call myfunc(10, 20)
 move.w     #20,-(sp)           ; Push right arg
@@ -464,6 +487,7 @@ dis            # Disassemble
 ### Study the ROM
 
 The ROM source (`../rom.asm`) shows advanced techniques:
+
 - FAT16 filesystem implementation
 - Command parser
 - Formatted output engine
@@ -473,6 +497,7 @@ The ROM source (`../rom.asm`) shows advanced techniques:
 ### Read Instruction Documentation
 
 M68K Programmer's Reference Manual is invaluable:
+
 - All instruction encodings
 - Addressing modes
 - Flag behaviors
@@ -483,6 +508,7 @@ M68K Programmer's Reference Manual is invaluable:
 ### Efficient Loops
 
 Use `DBRA` instead of manual decrement:
+
 ```asm
 ; Good
         moveq      #99,d0
