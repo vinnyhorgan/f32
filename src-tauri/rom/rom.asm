@@ -17,89 +17,89 @@
 ;-------------------------------------------------------------------------------
 ; ROM Version Information
 ;-------------------------------------------------------------------------------
-ROM_VER_MAJ    equ $0001
-ROM_VER_MIN    equ $0000
-ROM_DATE_YEAR  equ $2026
-ROM_DATE_MONTH equ $02
-ROM_DATE_DAY   equ $05
+ROM_VER_MAJ      equ        $0001
+ROM_VER_MIN      equ        $0000
+ROM_DATE_YEAR    equ        $2026
+ROM_DATE_MONTH   equ        $02
+ROM_DATE_DAY     equ        $05
 
 ;-------------------------------------------------------------------------------
 ; Hardware Configuration
 ;-------------------------------------------------------------------------------
-F_CPU          equ 8000000                                                                                 ; 8 MHz CPU clock
-BAUD           equ 115200                                                                                  ; Serial baud rate
-BAUD_DIV       equ (((F_CPU*10)/(16*BAUD))+5)/10
-BAUD_DIV_L     equ (BAUD_DIV&$FF)
-BAUD_DIV_U     equ ((BAUD_DIV>>8)&$FF)
+F_CPU            equ        8000000                                             ; 8 MHz CPU clock
+BAUD             equ        115200                                              ; Serial baud rate
+BAUD_DIV         equ        (((F_CPU*10)/(16*BAUD))+5)/10
+BAUD_DIV_L       equ        (BAUD_DIV&$FF)
+BAUD_DIV_U       equ        ((BAUD_DIV>>8)&$FF)
 
 ;===============================================================================
 ; VECTOR TABLE
 ;===============================================================================
                  org        ROM
-                 dc.l       INITIAL_SP                                                                     ; Initial SSP
-                 dc.l       RESET                                                                          ; Initial PC
-                 dc.l       VEC_BUSFAULT                                                                   ; Bus error
-                 dc.l       VEC_ADRERROR                                                                   ; Address error
-                 dc.l       VEC_ILLINSTR                                                                   ; Illegal instruction
-                 dc.l       VEC_DIVBY0                                                                     ; Zero divide
-                 dc.l       VEC_CHK                                                                        ; CHK instruction
-                 dc.l       VEC_TRAPV                                                                      ; TRAPV instruction
-                 dc.l       VEC_PRIVVIOL                                                                   ; Privilege violation
-                 dc.l       VEC_TRACE                                                                      ; Trace
-                 dc.l       VEC_LINE1010                                                                   ; Line 1010 emulator
-                 dc.l       VEC_LINE1111                                                                   ; Line 1111 emulator
-                 dc.l       VEC_RESERVED                                                                   ; 12 - Reserved
-                 dc.l       VEC_RESERVED                                                                   ; 13 - Reserved
-                 dc.l       VEC_RESERVED                                                                   ; 14 - Reserved
-                 dc.l       VEC_UNINIVEC                                                                   ; Uninitialized interrupt
+                 dc.l       INITIAL_SP                                          ; Initial SSP
+                 dc.l       RESET                                               ; Initial PC
+                 dc.l       VEC_BUSFAULT                                        ; Bus error
+                 dc.l       VEC_ADRERROR                                        ; Address error
+                 dc.l       VEC_ILLINSTR                                        ; Illegal instruction
+                 dc.l       VEC_DIVBY0                                          ; Zero divide
+                 dc.l       VEC_CHK                                             ; CHK instruction
+                 dc.l       VEC_TRAPV                                           ; TRAPV instruction
+                 dc.l       VEC_PRIVVIOL                                        ; Privilege violation
+                 dc.l       VEC_TRACE                                           ; Trace
+                 dc.l       VEC_LINE1010                                        ; Line 1010 emulator
+                 dc.l       VEC_LINE1111                                        ; Line 1111 emulator
+                 dc.l       VEC_RESERVED                                        ; 12 - Reserved
+                 dc.l       VEC_RESERVED                                        ; 13 - Reserved
+                 dc.l       VEC_RESERVED                                        ; 14 - Reserved
+                 dc.l       VEC_UNINIVEC                                        ; Uninitialized interrupt
                  rept       8
-                 dc.l       VEC_RESERVED                                                                   ; 16-23 - Reserved
+                 dc.l       VEC_RESERVED                                        ; 16-23 - Reserved
                  endr
-                 dc.l       VEC_SPURIOUS                                                                   ; Spurious interrupt
-                 dc.l       VEC_AUTOVEC1                                                                   ; Autovector 1 (serial loader)
-                 dc.l       VEC_AUTOVEC2                                                                   ; Autovector 2
-                 dc.l       VEC_AUTOVEC3                                                                   ; Autovector 3
-                 dc.l       VEC_AUTOVEC4                                                                   ; Autovector 4
-                 dc.l       VEC_AUTOVEC5                                                                   ; Autovector 5
-                 dc.l       VEC_AUTOVEC6                                                                   ; Autovector 6
-                 dc.l       VEC_AUTOVEC7                                                                   ; Autovector 7
+                 dc.l       VEC_SPURIOUS                                        ; Spurious interrupt
+                 dc.l       VEC_AUTOVEC1                                        ; Autovector 1 (serial loader)
+                 dc.l       VEC_AUTOVEC2                                        ; Autovector 2
+                 dc.l       VEC_AUTOVEC3                                        ; Autovector 3
+                 dc.l       VEC_AUTOVEC4                                        ; Autovector 4
+                 dc.l       VEC_AUTOVEC5                                        ; Autovector 5
+                 dc.l       VEC_AUTOVEC6                                        ; Autovector 6
+                 dc.l       VEC_AUTOVEC7                                        ; Autovector 7
 
-        ; System calls (TRAP #n)
-                 dc.l       SYS_Exit                                                                       ; 0  - Return to system
-                 dc.l       SYS_WaitBtn                                                                    ; 1  - Wait for button press/release
-                 dc.l       SYS_OutChar                                                                    ; 2  - Single character output
-                 dc.l       SYS_OutStr                                                                     ; 3  - String output
-                 dc.l       SYS_OutFmt                                                                     ; 4  - Formatted string output
-                 dc.l       SYS_InChar                                                                     ; 5  - Single character input
-                 dc.l       SYS_PromptStr                                                                  ; 6  - Prompt for string input
-                 dc.l       SYS_ReadSector                                                                 ; 7  - Read sector from CF card
-                 dc.l       SYS_ListDirectory                                                              ; 8  - Iterate through directory
-                 dc.l       SYS_FindFile                                                                   ; 9  - Find named file
-                 dc.l       SYS_ReadFile                                                                   ; 10 - Read file into memory
-                 dc.l       SYS_GetDateTime                                                                ; 11 - Read from RTC
-                 dc.l       SYS_SetDateTime                                                                ; 12 - Set RTC time
-                 dc.l       SYS_GetSysInfo                                                                 ; 13 - Get system info pointer
-                 dc.l       $FFFFFFFF                                                                      ; 14 - Reserved
-                 dc.l       VEC_BREAKPT                                                                    ; 15 - Breakpoint (debugger)
+; System calls (TRAP #n)
+                 dc.l       SYS_Exit                                            ; 0  - Return to system
+                 dc.l       SYS_WaitBtn                                         ; 1  - Wait for button press/release
+                 dc.l       SYS_OutChar                                         ; 2  - Single character output
+                 dc.l       SYS_OutStr                                          ; 3  - String output
+                 dc.l       SYS_OutFmt                                          ; 4  - Formatted string output
+                 dc.l       SYS_InChar                                          ; 5  - Single character input
+                 dc.l       SYS_PromptStr                                       ; 6  - Prompt for string input
+                 dc.l       SYS_ReadSector                                      ; 7  - Read sector from CF card
+                 dc.l       SYS_ListDirectory                                   ; 8  - Iterate through directory
+                 dc.l       SYS_FindFile                                        ; 9  - Find named file
+                 dc.l       SYS_ReadFile                                        ; 10 - Read file into memory
+                 dc.l       SYS_GetDateTime                                     ; 11 - Read from RTC
+                 dc.l       SYS_SetDateTime                                     ; 12 - Set RTC time
+                 dc.l       SYS_GetSysInfo                                      ; 13 - Get system info pointer
+                 dc.l       $FFFFFFFF                                           ; 14 - Reserved
+                 dc.l       VEC_BREAKPT                                         ; 15 - Breakpoint (debugger)
 
 ;===============================================================================
 ; RESET HANDLER
 ;===============================================================================
 RESET:
-        ; Initialize UART
+; Initialize UART
                  lea.l      UART,a1
-                 move.b     #%00001101,FCR(a1)                                                             ; Enable FIFO
-                 move.b     #%10000011,LCR(a1)                                                             ; 8N1, DLAB=1
-                 move.b     #BAUD_DIV_L,DLL(a1)                                                            ; Divisor latch low
-                 move.b     #BAUD_DIV_U,DLM(a1)                                                            ; Divisor latch high
-                 bclr.b     #7,LCR(a1)                                                                     ; DLAB=0
-                 clr.b      SCR(a1)                                                                        ; Clear scratchpad
-                 move.b     #(1<<MCR_COPI),MCR(a1)                                                         ; SPI COPI idles low
+                 move.b     #%00001101,FCR(a1)                                  ; Enable FIFO
+                 move.b     #%10000011,LCR(a1)                                  ; 8N1, DLAB=1
+                 move.b     #BAUD_DIV_L,DLL(a1)                                 ; Divisor latch low
+                 move.b     #BAUD_DIV_U,DLM(a1)                                 ; Divisor latch high
+                 bclr.b     #7,LCR(a1)                                          ; DLAB=0
+                 clr.b      SCR(a1)                                             ; Clear scratchpad
+                 move.b     #(1<<MCR_COPI),MCR(a1)                              ; SPI COPI idles low
 
-        ; Save button state at boot
+; Save button state at boot
                  move.b     MSR(a1),SCR(a1)
 
-        ; Welcome message
+; Welcome message
                  led_on
                  lea.l      str_startup,a0
                  bl         _printstr
@@ -120,12 +120,12 @@ RESET:
                  lea.l      str_ramtest,a0
                  bl         _printstr
 
-        ; Write test pattern
+; Write test pattern
                  lea.l      RAM,a0
                  lea.l      RAMEND,a3
-                 move.l     #$A5C99C5A,d0                                                                  ; Test pattern 1
+                 move.l     #$A5C99C5A,d0                                       ; Test pattern 1
                  move.l     d0,d1
-                 not.l      d1                                                                             ; Test pattern 2
+                 not.l      d1                                                  ; Test pattern 2
 .write_loop:
                  rept       8
                  move.l     d0,(a0)+
@@ -134,7 +134,7 @@ RESET:
                  cmp.l      a0,a3
                  bne        .write_loop
 
-        ; Read back and verify
+; Read back and verify
                  lea.l      RAM,a0
                  lea.l      RAMEND,a3
 .read_loop:
@@ -151,13 +151,13 @@ testpass:        lea.l      str_testpass,a0
                  bl         _printstr
                  bra        ready
 
-testfail:        lea.l      -4(a0),a2                                                                      ; Address of failure
+testfail:        lea.l      -4(a0),a2                                           ; Address of failure
                  lea.l      str_testfail,a0
                  bl         _printstr
                  move.l     a2,d0
                  bl         _printhexl
 
-        ; Flash LED to indicate failure
+; Flash LED to indicate failure
 lockup:          led_tgl
                  move.l     #$8000,d0
 .1:              dbra       d0,.1
@@ -205,33 +205,33 @@ _printstr:       move.b     (a0)+,d0
 ; SYSTEM READY - Memory is usable
 ;===============================================================================
 ready:
-                 move.l     #INITIAL_SP,sp                                                                 ; Reset stack pointer
-                 move.l     #uart_outchar,OUTCH_VEC                                                        ; Default I/O is serial
+                 move.l     #INITIAL_SP,sp                                      ; Reset stack pointer
+                 move.l     #uart_outchar,OUTCH_VEC                             ; Default I/O is serial
                  move.l     #uart_inchar,INCH_VEC
                  move.l     #hexdigits_uc,HEXDIGITS
-                 move.l     #$2d3a2c00,SEPARATORS                                                          ; Hyphen, colon, comma
+                 move.l     #$2d3a2c00,SEPARATORS                               ; Hyphen, colon, comma
 
-        ; Print system info
+; Print system info
                  sys        GetSysInfo
-                 move.l     0(a0),-(sp)                                                                    ; Clock speed
-                 move.l     8(a0),-(sp)                                                                    ; ROM size
-                 move.l     4(a0),-(sp)                                                                    ; RAM size
+                 move.l     0(a0),-(sp)                                         ; Clock speed
+                 move.l     8(a0),-(sp)                                         ; ROM size
+                 move.l     4(a0),-(sp)                                         ; RAM size
                  lea.l      fmt_sysinfo,a0
                  sys        OutFmt
                  lea.l      12(sp),sp
 
-        ; Check for RTC
+; Check for RTC
                  bsr        printtime
 
-        ; Enable break interrupt for serial loader
+; Enable break interrupt for serial loader
                  move.b     #%00000100,IER(a1)
-                 move.w     #$2000,sr                                                                      ; Enable interrupts
+                 move.w     #$2000,sr                                           ; Enable interrupts
 
-        ; Try to mount filesystem
+; Try to mount filesystem
                  bsr        fs_mount
                  beq        .foundcard
 
-        ; Mount error
+; Mount error
                  bsr        fs_errorstr
                  move.w     d0,-(sp)
                  litstr     FMT_ERR,"\n"
@@ -245,16 +245,16 @@ ready:
 .foundcard:      litstr     "CARD DETECTED: ",FMT_U32," KB '",FMT_S,"'\n"
                  pea        VOLNAME
                  move.l     PARTSIZE,d0
-                 lsr.l      #1,d0                                                                          ; Convert sectors to KB
+                 lsr.l      #1,d0                                               ; Convert sectors to KB
                  move.l     d0,-(sp)
                  sys        OutFmt
                  addq       #8,sp
 
-        ; Check for startup bypass (button held at boot)
+; Check for startup bypass (button held at boot)
                  btst.b     #MSR_BTN1,UART+SCR
                  bne        .skipstartup
 
-        ; Try to run STARTUP.BIN
+; Try to run STARTUP.BIN
                  moveq      #-1,d0
                  lea.l      APPMEMSTART,a1
                  litstr     "STARTUP.BIN"
@@ -262,7 +262,7 @@ ready:
                  tst.b      d0
                  bne        .nostartup
 
-        ; Launch startup file
+; Launch startup file
                  litstr     "RUNNING STARTUP.BIN\n"
                  sys        OutStr
                  bra        launchapp
@@ -316,7 +316,7 @@ SYS_OutStr:      pushm      a2-a3
 ; OutFmt - Formatted string output
 ; A0.L = format string, arguments on stack
 SYS_OutFmt:      pushm      d2/a2-a6
-                 lea.l      30(sp),a6                                                                      ; Point to arguments
+                 lea.l      30(sp),a6                                           ; Point to arguments
                  move.l     a0,a2
                  move.l     OUTCH_VEC,a3
                  move.l     HEXDIGITS,a5
@@ -1634,8 +1634,8 @@ fserrtable:      dc.l       fserr_noerror
 ; SHELL (COMMAND INTERPRETER)
 ;===============================================================================
 
-loadaddr       equ APPMEMSTART
-loadlen        equ RAMEND-loadaddr-256
+loadaddr         equ        APPMEMSTART
+loadlen          equ        RAMEND-loadaddr-256
 
 startshell:      litstr     "\nTYPE ? [ENTER] FOR HELP."
                  sys        OutStr
@@ -1649,16 +1649,16 @@ shell:           litstr     "\n> "
                  tst.l      d0
                  beq        shell
 
-        ; Help?
+; Help?
                  move.b     (a0)+,d0
                  cmp.b      #'?',d0
                  beq        help
 
-        ; Internal command?
+; Internal command?
                  cmp.b      #'.',d0
                  bne        runfile
 
-        ; Parse command
+; Parse command
                  move.b     (a0)+,d0
 .1:              cmp.b      #$20,(a0)+
                  beq        .1

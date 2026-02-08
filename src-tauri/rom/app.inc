@@ -3,5 +3,5 @@
 ; Flux32 Application Template
 ; Include this file to write applications for Flux32
 
-        include "flux32.inc"
-        org     APPMEMSTART
+                 include    "flux32.inc"
+                 org        APPMEMSTART
