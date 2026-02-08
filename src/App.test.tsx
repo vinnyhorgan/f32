@@ -4,7 +4,7 @@ import App from "./App";
 
 // Mock the module
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn(() => Promise.resolve()), // Return a promise
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
@@ -15,10 +15,10 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 describe("App", () => {
-  it("renders without crashing", () => {
+  it("renders without crashing", async () => {
+    expect.assertions(1); // Ensure 1 assertion runs
     render(<App />);
     // Just check if something renders, e.g. the main container or title
-    // Since I don't know the exact text, I'll rely on it not throwing.
     expect(document.body).toBeInTheDocument();
   });
 });

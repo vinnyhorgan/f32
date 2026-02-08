@@ -11,9 +11,10 @@
     "lint": "eslint . --max-warnings 0 && tsc --noEmit",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write . && taplo format src-tauri/Cargo.toml",
-    "check": "pnpm format && pnpm lint && cd src-tauri && cargo fmt -- --check && cargo clippy -- -D warnings",
+    "check": "pnpm format && pnpm lint && pnpm test:run && cd src-tauri && cargo fmt -- --check && cargo clippy -- -D warnings && cargo test -- --test-threads=1",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "prepare": "husky"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
@@ -57,7 +58,9 @@
     "eslint-plugin-react": "7.37.2",
     "eslint-plugin-react-hooks": "5.0.0",
     "globals": "^17.3.0",
+    "husky": "^9.1.7",
     "jsdom": "^28.0.0",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tw-animate-css": "^1.4.0",
