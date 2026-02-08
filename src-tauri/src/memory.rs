@@ -732,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_word_read_past_boundary() {
-        let mut mem = Memory::new(1024);
+        let mem = Memory::new(1024);
         // Word read that goes past memory boundary should fail
         let result = mem.read_word(0x3FF);
         assert!(matches!(result, Err(MemoryError::AddressOutOfRange { .. })));
@@ -740,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_long_read_past_boundary() {
-        let mut mem = Memory::new(1024);
+        let mem = Memory::new(1024);
         // Long read that goes past memory boundary should fail
         let result = mem.read_long(0x3FD);
         assert!(matches!(result, Err(MemoryError::AddressOutOfRange { .. })));
