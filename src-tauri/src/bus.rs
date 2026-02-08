@@ -53,9 +53,9 @@ pub enum BusError {
 impl fmt::Display for BusError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Unmapped(addr) => write!(f, "Unmapped address: ${:06X}", addr),
-            Self::ReadOnly(addr) => write!(f, "Write to ROM at ${:06X}", addr),
-            Self::Alignment(addr) => write!(f, "Alignment error at ${:06X}", addr),
+            Self::Unmapped(addr) => write!(f, "Unmapped address: ${addr:06X}"),
+            Self::ReadOnly(addr) => write!(f, "Write to ROM at ${addr:06X}"),
+            Self::Alignment(addr) => write!(f, "Alignment error at ${addr:06X}"),
         }
     }
 }
@@ -126,16 +126,16 @@ impl RomRegion {
     #[inline]
     pub fn read_word(&self, offset: u32) -> u16 {
         let idx = (offset as usize) & (Self::SIZE - 1);
-        let hi = self.data[idx] as u16;
-        let lo = self.data[(idx + 1) & (Self::SIZE - 1)] as u16;
+        let hi = u16::from(self.data[idx]);
+        let lo = u16::from(self.data[(idx + 1) & (Self::SIZE - 1)]);
         (hi << 8) | lo
     }
 
     /// Reads a long word from ROM (big-endian).
     #[inline]
     pub fn read_long(&self, offset: u32) -> u32 {
-        let hi = self.read_word(offset) as u32;
-        let lo = self.read_word(offset.wrapping_add(2)) as u32;
+        let hi = u32::from(self.read_word(offset));
+        let lo = u32::from(self.read_word(offset.wrapping_add(2)));
         (hi << 16) | lo
     }
 }
@@ -191,8 +191,8 @@ impl RamRegion {
     #[inline]
     pub fn read_word(&self, offset: u32) -> u16 {
         let idx = (offset as usize) & (Self::SIZE - 1);
-        let hi = self.data[idx] as u16;
-        let lo = self.data[(idx + 1) & (Self::SIZE - 1)] as u16;
+        let hi = u16::from(self.data[idx]);
+        let lo = u16::from(self.data[(idx + 1) & (Self::SIZE - 1)]);
         (hi << 8) | lo
     }
 
@@ -207,8 +207,8 @@ impl RamRegion {
     /// Reads a long word from RAM (big-endian).
     #[inline]
     pub fn read_long(&self, offset: u32) -> u32 {
-        let hi = self.read_word(offset) as u32;
-        let lo = self.read_word(offset.wrapping_add(2)) as u32;
+        let hi = u32::from(self.read_word(offset));
+        let lo = u32::from(self.read_word(offset.wrapping_add(2)));
         (hi << 16) | lo
     }
 
@@ -276,7 +276,7 @@ impl MemoryBus {
         self.uart_write = Some(write);
     }
 
-    /// Sets the CompactFlash I/O callbacks
+    /// Sets the `CompactFlash` I/O callbacks
     pub fn set_cf_handlers(&mut self, read: fn(u32) -> u8, write: fn(u32, u8)) {
         self.cf_read = Some(read);
         self.cf_write = Some(write);
@@ -302,7 +302,8 @@ impl MemoryBus {
         let uart_sel = a23 == 1 && a22 == 0 && a21 == 1;
         let card_sel = a20 == 1;
 
-        let selected = rom_sel as u8 + ram_sel as u8 + uart_sel as u8 + card_sel as u8;
+        let selected =
+            u8::from(rom_sel) + u8::from(ram_sel) + u8::from(uart_sel) + u8::from(card_sel);
         if selected == 0 {
             return AddressRegion::OpenBus;
         }
@@ -382,7 +383,7 @@ impl MemoryBus {
                 // Word read from UART: read two consecutive bytes
                 let hi = self.read_byte(addr)?;
                 let lo = self.read_byte(addr + 1)?;
-                Ok(((hi as u16) << 8) | (lo as u16))
+                Ok((u16::from(hi) << 8) | u16::from(lo))
             }
             AddressRegion::CfCard(offset) => {
                 // CF card data register is 16-bit
@@ -391,14 +392,14 @@ impl MemoryBus {
                     if let Some(read) = self.cf_read {
                         let hi = read(0);
                         let lo = read(1);
-                        Ok(((hi as u16) << 8) | (lo as u16))
+                        Ok((u16::from(hi) << 8) | u16::from(lo))
                     } else {
                         Ok(0xFFFF)
                     }
                 } else {
                     let hi = self.read_byte(addr)?;
                     let lo = self.read_byte(addr + 1)?;
-                    Ok(((hi as u16) << 8) | (lo as u16))
+                    Ok((u16::from(hi) << 8) | u16::from(lo))
                 }
             }
             AddressRegion::OpenBus | AddressRegion::Conflict => Ok(0xFFFF),
@@ -425,8 +426,8 @@ impl MemoryBus {
 
     /// Reads a long word (32-bit) from the bus.
     pub fn read_long(&self, addr: u32) -> BusResult<u32> {
-        let hi = self.read_word(addr)? as u32;
-        let lo = self.read_word(addr + 2)? as u32;
+        let hi = u32::from(self.read_word(addr)?);
+        let lo = u32::from(self.read_word(addr + 2)?);
         Ok((hi << 16) | lo)
     }
 
@@ -466,7 +467,7 @@ enum AddressRegion {
     Ram(u32),
     /// UART at $A00000 (with register offset)
     Uart(u32),
-    /// CompactFlash at $900000 (with register offset)
+    /// `CompactFlash` at $900000 (with register offset)
     CfCard(u32),
     /// Open bus (unmapped, returns 0xFF)
     OpenBus,

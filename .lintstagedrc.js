@@ -9,7 +9,8 @@ export default {
     // Run rustfmt on the whole project (fast enough usually)
     () => "cargo fmt --manifest-path src-tauri/Cargo.toml",
     // Run clippy on the whole project
-    () => "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    () =>
+      "cargo clippy --manifest-path src-tauri/Cargo.toml -- -W clippy::pedantic -W clippy::nursery -D warnings",
     // Run tests (crucial as requested)
     () => "cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1",
   ],

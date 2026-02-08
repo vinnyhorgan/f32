@@ -37,7 +37,7 @@
 use std::collections::VecDeque;
 
 /// Base address of the UART in the system memory map
-pub const UART_BASE: u32 = 0xA00000;
+pub const UART_BASE: u32 = 0x00A0_0000;
 
 /// UART register offsets (byte offsets, though accessed as words)
 pub mod regs {
@@ -171,11 +171,11 @@ struct RtcSpi {
 }
 
 impl RtcSpi {
-    fn bcd(value: u8) -> u8 {
+    const fn bcd(value: u8) -> u8 {
         ((value / 10) << 4) | (value % 10)
     }
 
-    fn new() -> Self {
+    const fn new() -> Self {
         let mut regs = [0u8; 0x20];
 
         // Default to a valid, stable date/time (2020-07-07 19:14:36, weekday=2).
@@ -199,7 +199,7 @@ impl RtcSpi {
         }
     }
 
-    fn start_transfer(&mut self) {
+    const fn start_transfer(&mut self) {
         self.active = true;
         self.mode = SpiMode::Idle;
         self.addr = 0;
@@ -208,7 +208,7 @@ impl RtcSpi {
         self.shift_out = 0xFF;
     }
 
-    fn end_transfer(&mut self) {
+    const fn end_transfer(&mut self) {
         self.active = false;
         self.mode = SpiMode::Idle;
         self.addr = 0;
@@ -217,7 +217,7 @@ impl RtcSpi {
         self.shift_out = 0xFF;
     }
 
-    fn on_clock_rising(&mut self, copi_bit: u8) -> u8 {
+    const fn on_clock_rising(&mut self, copi_bit: u8) -> u8 {
         if !self.active {
             return 1;
         }
@@ -233,7 +233,7 @@ impl RtcSpi {
         out_bit
     }
 
-    fn finish_byte(&mut self) {
+    const fn finish_byte(&mut self) {
         match self.mode {
             SpiMode::Idle => {
                 let cmd = self.shift_in;
@@ -374,7 +374,7 @@ impl Uart16550 {
     }
 
     /// Clears the interrupt pending flag (call after servicing)
-    pub fn clear_interrupt(&mut self) {
+    pub const fn clear_interrupt(&mut self) {
         self.interrupt_pending = false;
     }
 
@@ -423,7 +423,7 @@ impl Uart16550 {
     ///
     /// The button is read via MSR bit 6 (RI). On the target board, the UART sees
     /// a high level when the button is pressed.
-    pub fn set_button(&mut self, pressed: bool) {
+    pub const fn set_button(&mut self, pressed: bool) {
         if pressed && !self.button_pressed {
             // Rising edge - button just pressed
             self.button_edge = true;
@@ -566,7 +566,7 @@ impl Uart16550 {
     }
 
     /// Reads the Modem Status Register
-    fn read_msr(&mut self) -> u8 {
+    const fn read_msr(&mut self) -> u8 {
         let mut msr = 0u8;
 
         // Button (RI) - active high
@@ -625,7 +625,7 @@ impl Uart16550 {
 
         if !prev_clk_high && new_clk_high && new_nss_active {
             // Rising edge: sample COPI and update CIPO.
-            let copi_bit = if (new & mcr::COPI) != 0 { 0 } else { 1 };
+            let copi_bit = u8::from((new & mcr::COPI) == 0);
             let out_bit = self.spi.on_clock_rising(copi_bit);
             self.spi_cipo_inverted = out_bit == 0;
         }
@@ -649,7 +649,7 @@ impl Uart16550 {
     /// Returns the current baud rate divisor
     #[must_use]
     pub fn divisor(&self) -> u16 {
-        ((self.dlm as u16) << 8) | (self.dll as u16)
+        (u16::from(self.dlm) << 8) | u16::from(self.dll)
     }
 
     /// Returns the calculated baud rate given a clock frequency
@@ -659,7 +659,7 @@ impl Uart16550 {
         if div == 0 {
             0
         } else {
-            clock_hz / (16 * div as u32)
+            clock_hz / (16 * u32::from(div))
         }
     }
 }

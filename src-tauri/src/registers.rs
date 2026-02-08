@@ -23,7 +23,7 @@ use std::fmt;
 /// - S=0 (user mode): A7 = USP
 ///
 /// Internally we track both and swap A7 when the mode changes.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RegisterFile {
     /// Data registers D0-D7 (32-bit each)
     pub d: [u32; 8],
@@ -75,7 +75,7 @@ impl RegisterFile {
     /// # Panics
     /// Panics if `reg` is >= 8.
     #[inline]
-    pub fn set_d(&mut self, reg: usize, value: u32) {
+    pub const fn set_d(&mut self, reg: usize, value: u32) {
         self.d[reg] = value;
     }
 
@@ -94,7 +94,7 @@ impl RegisterFile {
     /// # Panics
     /// Panics if `reg` is >= 8.
     #[inline]
-    pub fn set_a(&mut self, reg: usize, value: u32) {
+    pub const fn set_a(&mut self, reg: usize, value: u32) {
         self.a[reg] = value;
     }
 
@@ -107,7 +107,7 @@ impl RegisterFile {
 
     /// Writes to the stack pointer (A7).
     #[inline]
-    pub fn set_sp(&mut self, value: u32) {
+    pub const fn set_sp(&mut self, value: u32) {
         self.a[7] = value;
     }
 
@@ -115,7 +115,7 @@ impl RegisterFile {
     /// Returns the actual USP regardless of current mode.
     #[must_use]
     #[inline]
-    pub fn usp(&self) -> u32 {
+    pub const fn usp(&self) -> u32 {
         let supervisor = (self.sr & 0x2000) != 0;
         if supervisor {
             self.usp // In supervisor mode, USP is stored separately
@@ -127,7 +127,7 @@ impl RegisterFile {
     /// Writes to the user stack pointer (USP).
     /// Sets the actual USP regardless of current mode.
     #[inline]
-    pub fn set_usp(&mut self, value: u32) {
+    pub const fn set_usp(&mut self, value: u32) {
         let supervisor = (self.sr & 0x2000) != 0;
         if supervisor {
             self.usp = value; // In supervisor mode, USP is stored separately
@@ -147,7 +147,7 @@ impl RegisterFile {
 
     /// Writes to the program counter.
     #[inline]
-    pub fn set_pc(&mut self, value: u32) {
+    pub const fn set_pc(&mut self, value: u32) {
         self.pc = value;
     }
 
@@ -167,7 +167,7 @@ impl RegisterFile {
     /// - Supervisor -> User: save current A7 to SSP (internally stored), load USP into A7
     /// - User -> Supervisor: save current A7 to USP, load SSP into A7
     #[inline]
-    pub fn set_sr(&mut self, value: u16) {
+    pub const fn set_sr(&mut self, value: u16) {
         let old_supervisor = (self.sr & 0x2000) != 0;
         let new_supervisor = (value & 0x2000) != 0;
 
@@ -192,7 +192,7 @@ impl RegisterFile {
     /// Returns the actual SSP regardless of current mode.
     #[must_use]
     #[inline]
-    pub fn get_ssp(&self) -> u32 {
+    pub const fn get_ssp(&self) -> u32 {
         let supervisor = (self.sr & 0x2000) != 0;
         if supervisor {
             self.a[7] // In supervisor mode, A7 is SSP
@@ -240,7 +240,7 @@ pub struct CcrFlags {
 }
 
 impl CcrFlags {
-    /// Creates a new CcrFlags with all flags cleared.
+    /// Creates a new `CcrFlags` with all flags cleared.
     #[must_use]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
@@ -299,14 +299,14 @@ impl Default for CcrFlags {
     }
 }
 
-/// Extension trait for easy flag manipulation on RegisterFile.
+/// Extension trait for easy flag manipulation on `RegisterFile`.
 // Allow dead code: kept for tests, completeness, or CLI-only usage.
 #[allow(dead_code)]
 pub trait FlagOps {
     /// Gets the current condition code flags.
     fn get_ccr(&self) -> CcrFlags;
 
-    /// Sets condition code flags from a CcrFlags struct.
+    /// Sets condition code flags from a `CcrFlags` struct.
     fn set_ccr(&mut self, flags: CcrFlags);
 
     /// Gets the carry flag.

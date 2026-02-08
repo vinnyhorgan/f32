@@ -87,7 +87,7 @@ impl Cpu {
     /// Sets the program counter.
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn set_pc(&mut self, value: u32) {
+    pub const fn set_pc(&mut self, value: u32) {
         self.registers.set_pc(value);
     }
 
@@ -102,7 +102,7 @@ impl Cpu {
     /// Sets the status register.
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn set_sr(&mut self, value: u16) {
+    pub const fn set_sr(&mut self, value: u16) {
         self.registers.set_sr(value);
     }
 
@@ -117,14 +117,14 @@ impl Cpu {
     /// Halts the CPU.
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn halt(&mut self) {
+    pub const fn halt(&mut self) {
         self.halted = true;
     }
 
     /// Resumes the CPU.
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn resume(&mut self) {
+    pub const fn resume(&mut self) {
         self.halted = false;
     }
 
@@ -140,7 +140,7 @@ impl Cpu {
     #[must_use]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn memory_mut(&mut self) -> &mut Memory {
+    pub const fn memory_mut(&mut self) -> &mut Memory {
         &mut self.memory
     }
 
@@ -170,7 +170,7 @@ impl Cpu {
         // Dispatch to instruction handler
         let result = self.execute(opcode);
         self.registers.set_pc(result.pc);
-        self.cycles += result.cycles as u64;
+        self.cycles += u64::from(result.cycles);
 
         // Handle exceptions if triggered
         if result.exception != 0 {
@@ -250,7 +250,7 @@ impl Cpu {
         self.registers.set_a(7, new_ssp);
 
         // Load new PC from vector table (vector * 4)
-        let vector_addr = (vector as u32) * 4;
+        let vector_addr = u32::from(vector) * 4;
         let new_pc = self.memory.read_long(vector_addr).unwrap_or(0);
 
         self.registers.set_pc(new_pc);
@@ -272,7 +272,7 @@ impl Cpu {
 
         // Update SR: set supervisor, clear trace, and set IPL to interrupt level.
         let mut new_sr = (old_sr | 0x2000) & !0x8000;
-        new_sr = (new_sr & !0x0700) | ((level as u16) << 8);
+        new_sr = (new_sr & !0x0700) | (u16::from(level) << 8);
 
         // Autovector number is 24 + level.
         let vector = 24 + level;

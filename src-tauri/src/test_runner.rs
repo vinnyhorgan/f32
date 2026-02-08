@@ -22,12 +22,12 @@ use std::path::Path;
 ///
 /// These constants document the MMIO addresses expected by Musashi test binaries.
 /// Tests write to these addresses to signal pass/fail status and request debug output.
-const TEST_FAIL_REG: u32 = 0x100000;
-const TEST_PASS_REG: u32 = 0x100004;
-const PRINT_REG_REG: u32 = 0x100008;
-const INTERRUPT_REG: u32 = 0x10000C;
-const STDOUT_REG: u32 = 0x100014;
-const PRINT_FP_REG: u32 = 0x100020;
+const TEST_FAIL_REG: u32 = 0x0100_0000;
+const TEST_PASS_REG: u32 = 0x0100_0004;
+const PRINT_REG_REG: u32 = 0x0100_0008;
+const INTERRUPT_REG: u32 = 0x0100_000C;
+const STDOUT_REG: u32 = 0x0100_0014;
+const PRINT_FP_REG: u32 = 0x0100_0020;
 
 /// Initial stack pointer for test execution
 const STACK_BASE: u32 = 0x3F0;
@@ -77,15 +77,15 @@ fn musashi_write_hook(
             WriteHookResult::Handled
         }
         PRINT_REG_REG => {
-            eprintln!("PRINT_REG: CPU state requested (value=0x{:08X})", value);
+            eprintln!("PRINT_REG: CPU state requested (value=0x{value:08X})");
             WriteHookResult::Handled
         }
         INTERRUPT_REG => {
-            eprintln!("INTERRUPT: Interrupt requested (value=0x{:08X})", value);
+            eprintln!("INTERRUPT: Interrupt requested (value=0x{value:08X})");
             WriteHookResult::Handled
         }
         PRINT_FP_REG => {
-            eprintln!("PRINT_FP: FP registers requested (value=0x{:08X})", value);
+            eprintln!("PRINT_FP: FP registers requested (value=0x{value:08X})");
             WriteHookResult::Handled
         }
         _ => WriteHookResult::Unhandled,
@@ -133,7 +133,7 @@ impl TestRunner {
     /// Load a Musashi test binary from file
     pub fn load_test(&mut self, path: &Path) -> Result<(), String> {
         // Read the test binary
-        let rom_data = fs::read(path).map_err(|e| format!("Failed to read test file: {}", e))?;
+        let rom_data = fs::read(path).map_err(|e| format!("Failed to read test file: {e}"))?;
 
         // Reset CPU first to clear any previous state
         // This also clears memory, so we load ROM after this
@@ -151,7 +151,7 @@ impl TestRunner {
             self.cpu
                 .memory_mut()
                 .write_byte(addr, byte)
-                .map_err(|e| format!("Failed to write ROM at {:08X}: {}", addr, e))?;
+                .map_err(|e| format!("Failed to write ROM at {addr:08X}: {e}"))?;
         }
 
         // Setup boot vectors
@@ -162,12 +162,12 @@ impl TestRunner {
             .cpu
             .memory_mut()
             .read_long(0)
-            .map_err(|e| format!("Failed to read initial SP: {}", e))?;
+            .map_err(|e| format!("Failed to read initial SP: {e}"))?;
         let initial_pc = self
             .cpu
             .memory_mut()
             .read_long(4)
-            .map_err(|e| format!("Failed to read initial PC: {}", e))?;
+            .map_err(|e| format!("Failed to read initial PC: {e}"))?;
 
         self.cpu.registers.set_sp(initial_sp);
         self.cpu.set_pc(initial_pc);
@@ -185,13 +185,13 @@ impl TestRunner {
         self.cpu
             .memory_mut()
             .write_long(0, STACK_BASE)
-            .map_err(|e| format!("Failed to write SSP: {}", e))?;
+            .map_err(|e| format!("Failed to write SSP: {e}"))?;
 
         // Vector 1: Initial PC (Program Counter - entry point)
         self.cpu
             .memory_mut()
             .write_long(4, TEST_ENTRY)
-            .map_err(|e| format!("Failed to write PC: {}", e))?;
+            .map_err(|e| format!("Failed to write PC: {e}"))?;
 
         Ok(())
     }
@@ -234,7 +234,7 @@ impl TestRunner {
             cycle_count += 1;
         }
 
-        eprintln!("Test TIMEOUT after {} cycles", cycle_count);
+        eprintln!("Test TIMEOUT after {cycle_count} cycles");
         eprintln!("Last PC: 0x{:08X}", self.cpu.pc());
         for i in 0..8 {
             eprintln!(
@@ -260,7 +260,7 @@ pub struct TestSuiteResults {
 }
 
 impl TestSuiteResults {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             total: 0,
             passed: 0,
@@ -270,7 +270,7 @@ impl TestSuiteResults {
         }
     }
 
-    fn record(&mut self, result: TestResult) {
+    const fn record(&mut self, result: TestResult) {
         self.total += 1;
         match result {
             TestResult::Pass => self.passed += 1,
@@ -288,12 +288,12 @@ pub fn run_test_suite(test_dir: &Path) -> TestSuiteResults {
     // Find all .bin files in the directory
     let paths = match fs::read_dir(test_dir) {
         Ok(entries) => entries
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| e.path())
             .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("bin"))
             .collect::<Vec<_>>(),
         Err(e) => {
-            eprintln!("Failed to read test directory: {}", e);
+            eprintln!("Failed to read test directory: {e}");
             return results;
         }
     };
@@ -312,7 +312,7 @@ pub fn run_test_suite(test_dir: &Path) -> TestSuiteResults {
 
     for path in paths {
         let test_name = path.file_name().unwrap().to_string_lossy();
-        print!("  {}: ", test_name);
+        print!("  {test_name}: ");
         std::io::Write::flush(&mut std::io::stdout()).ok();
 
         let mut runner = TestRunner::new();
@@ -323,12 +323,12 @@ pub fn run_test_suite(test_dir: &Path) -> TestSuiteResults {
                     TestResult::Pass => println!("PASS"),
                     TestResult::Fail => println!("FAIL"),
                     TestResult::Timeout => println!("TIMEOUT"),
-                    TestResult::Error(msg) => println!("ERROR: {}", msg),
+                    TestResult::Error(msg) => println!("ERROR: {msg}"),
                 }
                 results.record(result);
             }
             Err(e) => {
-                println!("ERROR loading: {}", e);
+                println!("ERROR loading: {e}");
                 results.record(TestResult::Error("Load failure"));
             }
         }

@@ -22,7 +22,7 @@ pub const MAX_MEMORY_SIZE: usize = 16 * 1024 * 1024;
 
 /// M68K uses 24-bit addresses (address bus is 24 bits wide)
 /// All addresses must be masked to 24 bits before accessing memory
-pub const ADDR_MASK: u32 = 0x00FFFFFF;
+pub const ADDR_MASK: u32 = 0x00FF_FFFF;
 
 /// Error type for memory operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,8 +38,7 @@ impl fmt::Display for MemoryError {
         match self {
             Self::AddressOutOfRange { address, size } => write!(
                 f,
-                "Address out of range: 0x{:08X} (size: {} bytes)",
-                address, size
+                "Address out of range: 0x{address:08X} (size: {size} bytes)"
             ),
         }
     }
@@ -164,7 +163,7 @@ impl Memory {
     /// Checks if an address is valid for a given access size.
     ///
     /// Returns `Ok(())` if valid, `Err(MemoryError)` if not.
-    fn check_bounds(&self, address: u32, size: usize) -> Result<(), MemoryError> {
+    const fn check_bounds(&self, address: u32, size: usize) -> Result<(), MemoryError> {
         // M68K uses 24-bit addresses - mask to 24 bits
         let addr = (address & ADDR_MASK) as usize;
         if addr.saturating_add(size) > self.size {
@@ -193,7 +192,7 @@ impl Memory {
         // Call write hook FIRST (for MMIO, even if address is out of bounds)
         if let Some(hook) = self.write_hook {
             if matches!(
-                hook(address, value as u32, OperandSize::Byte),
+                hook(address, u32::from(value), OperandSize::Byte),
                 WriteHookResult::Handled
             ) {
                 return Ok(());
@@ -214,24 +213,24 @@ impl Memory {
     /// The data is stored in big-endian format (Motorola convention).
     pub fn read_word(&self, address: u32) -> Result<u16, MemoryError> {
         if self.read_hook.is_some() {
-            let high = self.read_byte(address)? as u16;
-            let low = self.read_byte(address + 1)? as u16;
+            let high = u16::from(self.read_byte(address)?);
+            let low = u16::from(self.read_byte(address + 1)?);
             return Ok((high << 8) | low);
         }
 
         // For unaligned accesses, do two byte reads
         if address & 1 != 0 {
             // Unaligned: read high byte at address, low byte at address+1
-            let high = self.read_byte(address)? as u16;
-            let low = self.read_byte(address + 1)? as u16;
+            let high = u16::from(self.read_byte(address)?);
+            let low = u16::from(self.read_byte(address + 1)?);
             Ok((high << 8) | low)
         } else {
             // Aligned: fast path
             self.check_bounds(address, 2)?;
             // M68K uses 24-bit addresses - mask to 24 bits
             let addr = (address & ADDR_MASK) as usize;
-            let high = self.data[addr] as u16;
-            let low = self.data[addr + 1] as u16;
+            let high = u16::from(self.data[addr]);
+            let low = u16::from(self.data[addr + 1]);
             Ok((high << 8) | low)
         }
     }
@@ -246,7 +245,7 @@ impl Memory {
         // Call write hook FIRST (for MMIO, even if address is out of bounds)
         if let Some(hook) = self.write_hook {
             if matches!(
-                hook(address, value as u32, OperandSize::Word),
+                hook(address, u32::from(value), OperandSize::Word),
                 WriteHookResult::Handled
             ) {
                 return Ok(());
@@ -254,21 +253,11 @@ impl Memory {
         }
 
         // For unaligned accesses, do two byte writes
-        if address & 1 != 0 {
-            self.check_bounds(address, 2)?;
-            let addr = (address & ADDR_MASK) as usize;
-            self.data[addr] = (value >> 8) as u8;
-            self.data[addr + 1] = value as u8;
-            Ok(())
-        } else {
-            // Aligned: fast path
-            self.check_bounds(address, 2)?;
-            // M68K uses 24-bit addresses - mask to 24 bits
-            let addr = (address & ADDR_MASK) as usize;
-            self.data[addr] = (value >> 8) as u8;
-            self.data[addr + 1] = (value & 0xFF) as u8;
-            Ok(())
-        }
+        self.check_bounds(address, 2)?;
+        let addr = (address & ADDR_MASK) as usize;
+        self.data[addr] = (value >> 8) as u8;
+        self.data[addr + 1] = value as u8;
+        Ok(())
     }
 
     /// Reads a long word (32 bits) from memory.
@@ -279,28 +268,28 @@ impl Memory {
     /// The data is stored in big-endian format (Motorola convention).
     pub fn read_long(&self, address: u32) -> Result<u32, MemoryError> {
         if self.read_hook.is_some() {
-            let b0 = self.read_byte(address)? as u32;
-            let b1 = self.read_byte(address + 1)? as u32;
-            let b2 = self.read_byte(address + 2)? as u32;
-            let b3 = self.read_byte(address + 3)? as u32;
+            let b0 = u32::from(self.read_byte(address)?);
+            let b1 = u32::from(self.read_byte(address + 1)?);
+            let b2 = u32::from(self.read_byte(address + 2)?);
+            let b3 = u32::from(self.read_byte(address + 3)?);
             return Ok((b0 << 24) | (b1 << 16) | (b2 << 8) | b3);
         }
 
         // For unaligned accesses (odd address), do byte + word + byte reads
         if address & 1 != 0 {
-            let b0 = self.read_byte(address)? as u32;
-            let w1 = self.read_word(address + 1)? as u32;
-            let b3 = self.read_byte(address + 3)? as u32;
+            let b0 = u32::from(self.read_byte(address)?);
+            let w1 = u32::from(self.read_word(address + 1)?);
+            let b3 = u32::from(self.read_byte(address + 3)?);
             Ok((b0 << 24) | (w1 << 8) | b3)
         } else {
             // Even address: can do aligned longword read
             self.check_bounds(address, 4)?;
             // M68K uses 24-bit addresses - mask to 24 bits
             let addr = (address & ADDR_MASK) as usize;
-            let b0 = self.data[addr] as u32;
-            let b1 = self.data[addr + 1] as u32;
-            let b2 = self.data[addr + 2] as u32;
-            let b3 = self.data[addr + 3] as u32;
+            let b0 = u32::from(self.data[addr]);
+            let b1 = u32::from(self.data[addr + 1]);
+            let b2 = u32::from(self.data[addr + 2]);
+            let b3 = u32::from(self.data[addr + 3]);
             Ok((b0 << 24) | (b1 << 16) | (b2 << 8) | b3)
         }
     }
@@ -323,25 +312,13 @@ impl Memory {
         }
 
         // For unaligned accesses (odd address), do byte + word + byte writes
-        if address & 1 != 0 {
-            self.check_bounds(address, 4)?;
-            let addr = (address & ADDR_MASK) as usize;
-            self.data[addr] = (value >> 24) as u8;
-            self.data[addr + 1] = ((value >> 16) & 0xFF) as u8;
-            self.data[addr + 2] = ((value >> 8) & 0xFF) as u8;
-            self.data[addr + 3] = (value & 0xFF) as u8;
-            Ok(())
-        } else {
-            // Even address: can do aligned longword write
-            self.check_bounds(address, 4)?;
-            // M68K uses 24-bit addresses - mask to 24 bits
-            let addr = (address & ADDR_MASK) as usize;
-            self.data[addr] = (value >> 24) as u8;
-            self.data[addr + 1] = ((value >> 16) & 0xFF) as u8;
-            self.data[addr + 2] = ((value >> 8) & 0xFF) as u8;
-            self.data[addr + 3] = (value & 0xFF) as u8;
-            Ok(())
-        }
+        self.check_bounds(address, 4)?;
+        let addr = (address & ADDR_MASK) as usize;
+        self.data[addr] = (value >> 24) as u8;
+        self.data[addr + 1] = ((value >> 16) & 0xFF) as u8;
+        self.data[addr + 2] = ((value >> 8) & 0xFF) as u8;
+        self.data[addr + 3] = (value & 0xFF) as u8;
+        Ok(())
     }
 
     /// Reads a byte from memory without bounds checking.
@@ -369,8 +346,8 @@ impl Memory {
         if addr + 1 >= self.data.len() {
             return 0;
         }
-        let high = self.data[addr] as u16;
-        let low = self.data[addr + 1] as u16;
+        let high = u16::from(self.data[addr]);
+        let low = u16::from(self.data[addr + 1]);
         (high << 8) | low
     }
 
@@ -386,10 +363,10 @@ impl Memory {
         if addr + 3 >= self.data.len() {
             return 0;
         }
-        let b0 = self.data[addr] as u32;
-        let b1 = self.data[addr + 1] as u32;
-        let b2 = self.data[addr + 2] as u32;
-        let b3 = self.data[addr + 3] as u32;
+        let b0 = u32::from(self.data[addr]);
+        let b1 = u32::from(self.data[addr + 1]);
+        let b2 = u32::from(self.data[addr + 2]);
+        let b3 = u32::from(self.data[addr + 3]);
         (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
     }
 
@@ -417,6 +394,7 @@ impl Memory {
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
     pub fn dump_range(&self, start: u32, length: usize) -> String {
+        use std::fmt::Write;
         let mut output = String::new();
         // M68K uses 24-bit addresses - mask to 24 bits
         let mut addr = (start & ADDR_MASK) as usize;
@@ -424,12 +402,12 @@ impl Memory {
 
         while addr < end {
             // Print address
-            output.push_str(&format!("{:08X}: ", addr));
+            let _ = write!(output, "{addr:08X}: ");
 
             // Print hex bytes (16 bytes per line)
             for i in 0..16 {
                 if addr + i < end {
-                    output.push_str(&format!("{:02X} ", self.data[addr + i]));
+                    let _ = write!(output, "{:02X} ", self.data[addr + i]);
                 } else {
                     output.push_str("   ");
                 }
@@ -500,7 +478,9 @@ impl Memory {
 
 impl fmt::Debug for Memory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Memory").field("size", &self.size).finish()
+        f.debug_struct("Memory")
+            .field("size", &self.size)
+            .finish_non_exhaustive()
     }
 }
 

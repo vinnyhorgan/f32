@@ -75,7 +75,7 @@ impl OperandSize {
         match self {
             Self::Byte => 0x80,
             Self::Word => 0x8000,
-            Self::Long => 0x80000000,
+            Self::Long => 0x8000_0000,
         }
     }
 
@@ -89,7 +89,7 @@ impl OperandSize {
         match self {
             Self::Byte => 0xFF,
             Self::Word => 0xFFFF,
-            Self::Long => 0xFFFFFFFF,
+            Self::Long => 0xFFFF_FFFF,
         }
     }
 
@@ -351,7 +351,7 @@ impl EaResolver {
                 pc += 2;
 
                 let base = registers.a(reg as usize);
-                let addr = (base as i32).wrapping_add(disp as i32) as u32;
+                let addr = (base as i32).wrapping_add(i32::from(disp)) as u32;
                 (EffectiveAddress::Memory(addr), pc)
             }
 
@@ -372,11 +372,11 @@ impl EaResolver {
 
                 // Sign-extend or truncate index based on size
                 let index = match index_ext.size {
-                    IndexSize::Word => (index_val as i16) as i32,
+                    IndexSize::Word => i32::from(index_val as i16),
                     IndexSize::Long => index_val as i32,
                 };
 
-                let displacement = index_ext.displacement as i32;
+                let displacement = i32::from(index_ext.displacement);
                 let addr = (base as i32).wrapping_add(index).wrapping_add(displacement) as u32;
 
                 (EffectiveAddress::Memory(addr), pc)
@@ -384,7 +384,7 @@ impl EaResolver {
 
             AddressingMode::AbsoluteShort => {
                 // Fetch the absolute address (sign-extended)
-                let addr = memory.read_word_unchecked(pc) as i16 as i32 as u32;
+                let addr = i32::from(memory.read_word_unchecked(pc) as i16) as u32;
                 pc += 2;
                 (EffectiveAddress::Memory(addr), pc)
             }
@@ -401,12 +401,12 @@ impl EaResolver {
                 let value = match size {
                     OperandSize::Byte => {
                         // Immediate data is always word-sized for bytes, MSB is ignored
-                        let data = memory.read_word_unchecked(pc) as u32;
+                        let data = u32::from(memory.read_word_unchecked(pc));
                         pc += 2;
                         data & 0xFF
                     }
                     OperandSize::Word => {
-                        let data = memory.read_word_unchecked(pc) as u32;
+                        let data = u32::from(memory.read_word_unchecked(pc));
                         pc += 2;
                         data
                     }
@@ -425,7 +425,7 @@ impl EaResolver {
 
                 // Calculate address relative to PC at the displacement word
                 // M68K semantics: displacement is relative to the PC pointing at the displacement word
-                let addr = (pc as i32).wrapping_add(disp as i32) as u32;
+                let addr = (pc as i32).wrapping_add(i32::from(disp)) as u32;
 
                 // Advance PC past the displacement word
                 pc += 2;
@@ -454,11 +454,11 @@ impl EaResolver {
 
                 // Sign-extend or truncate index based on size
                 let index = match index_ext.size {
-                    IndexSize::Word => (index_val as i16) as i32,
+                    IndexSize::Word => i32::from(index_val as i16),
                     IndexSize::Long => index_val as i32,
                 };
 
-                let displacement = index_ext.displacement as i32;
+                let displacement = i32::from(index_ext.displacement);
                 let addr = base.wrapping_add(index).wrapping_add(displacement) as u32;
 
                 (EffectiveAddress::Memory(addr), pc)
@@ -533,8 +533,8 @@ impl EaResolver {
             }
 
             EffectiveAddress::Memory(addr) => match size {
-                OperandSize::Byte => memory.read_byte(addr).unwrap_or(0) as u32,
-                OperandSize::Word => memory.read_word(addr).unwrap_or(0) as u32,
+                OperandSize::Byte => u32::from(memory.read_byte(addr).unwrap_or(0)),
+                OperandSize::Word => u32::from(memory.read_word(addr).unwrap_or(0)),
                 OperandSize::Long => memory.read_long(addr).unwrap_or(0),
             },
 
@@ -566,8 +566,8 @@ impl EaResolver {
                 let current = registers.d(reg as usize);
                 let masked_value = value & size.mask();
                 let new_value = match size {
-                    OperandSize::Byte => (current & 0xFFFFFF00) | masked_value,
-                    OperandSize::Word => (current & 0xFFFF0000) | masked_value,
+                    OperandSize::Byte => (current & 0xFFFF_FF00) | masked_value,
+                    OperandSize::Word => (current & 0xFFFF_0000) | masked_value,
                     OperandSize::Long => masked_value,
                 };
                 registers.set_d(reg as usize, new_value);
@@ -577,8 +577,8 @@ impl EaResolver {
                 let current = registers.a(reg as usize);
                 let masked_value = value & size.mask();
                 let new_value = match size {
-                    OperandSize::Byte => (current & 0xFFFFFF00) | masked_value,
-                    OperandSize::Word => (current & 0xFFFF0000) | masked_value,
+                    OperandSize::Byte => (current & 0xFFFF_FF00) | masked_value,
+                    OperandSize::Word => (current & 0xFFFF_0000) | masked_value,
                     OperandSize::Long => masked_value,
                 };
                 registers.set_a(reg as usize, new_value);
@@ -597,7 +597,7 @@ impl EaResolver {
                     OperandSize::Long => {
                         let _ = memory.write_long(addr, value);
                     }
-                };
+                }
             }
 
             EffectiveAddress::Immediate(_) => {

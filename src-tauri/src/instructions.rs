@@ -105,7 +105,7 @@ impl Instructions {
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
-    pub fn illegal(
+    pub const fn illegal(
         _registers: &mut RegisterFile,
         _memory: &Memory,
         _opcode: u16,
@@ -219,7 +219,7 @@ impl Instructions {
         pc: u32,
     ) -> InstructionResult {
         // Extract data and register
-        let data = (opcode & 0xFF) as i8 as i32 as u32; // Sign-extended
+        let data = i32::from((opcode & 0xFF) as i8) as u32; // Sign-extended
         let reg = (opcode >> 9) & 0x07;
 
         // Move to data register
@@ -384,7 +384,7 @@ impl Instructions {
 
         // Sign-extend if word size
         let src = if size == OperandSize::Word {
-            (src as i16) as i32 as u32
+            i32::from(src as i16) as u32
         } else {
             src
         };
@@ -438,7 +438,7 @@ impl Instructions {
 
         // Sign-extend if word size
         let src = if size == OperandSize::Word {
-            (src as i16) as i32 as u32
+            i32::from(src as i16) as u32
         } else {
             src
         };
@@ -482,9 +482,9 @@ impl Instructions {
                 // Opcode: 0100 1000 10 000 rrr
 
                 // Extract the byte from bits 0-7, sign-extend to 16 bits
-                let byte_value = (registers.d(reg) & 0xFF) as i8 as i16 as u32;
+                let byte_value = i16::from((registers.d(reg) & 0xFF) as i8) as u32;
                 // Clear the lower 16 bits and set the sign-extended word
-                let current = registers.d(reg) & 0xFFFF0000;
+                let current = registers.d(reg) & 0xFFFF_0000;
                 registers.set_d(reg, current | (byte_value & 0xFFFF));
 
                 // Set flags according to the result
@@ -500,11 +500,11 @@ impl Instructions {
                 // EXT.L: Word to long
                 // Opcode: 0100 1000 11 000 rrr
                 // Extract the word from bits 0-15, sign-extend to 32 bits
-                let word_value = (registers.d(reg) & 0xFFFF) as i16 as i32 as u32;
+                let word_value = i32::from((registers.d(reg) & 0xFFFF) as i16) as u32;
                 registers.set_d(reg, word_value);
 
                 // Set flags according to the result
-                registers.set_n((word_value & 0x80000000) != 0);
+                registers.set_n((word_value & 0x8000_0000) != 0);
                 registers.set_z(word_value == 0);
                 registers.set_v(false);
                 registers.set_c(false);
@@ -602,11 +602,11 @@ impl Instructions {
         // Read immediate (PC is at immediate data)
         let imm = match size {
             OperandSize::Byte => {
-                let imm = memory.read_word_unchecked(pc) as u8 as u32;
+                let imm = u32::from(memory.read_word_unchecked(pc) as u8);
                 (pc + 2, imm)
             }
             OperandSize::Word => {
-                let imm = memory.read_word_unchecked(pc) as u32;
+                let imm = u32::from(memory.read_word_unchecked(pc));
                 (pc + 2, imm)
             }
             OperandSize::Long => {
@@ -637,7 +637,7 @@ impl Instructions {
         opcode: u16,
         pc: u32,
     ) -> InstructionResult {
-        let data = ((opcode >> 9) & 0x07) as u32;
+        let data = u32::from((opcode >> 9) & 0x07);
         let data = if data == 0 { 8 } else { data }; // 0 means 8
 
         let size = match (opcode >> 6) & 0x03 {
@@ -666,7 +666,7 @@ impl Instructions {
             let dst = registers.a(reg as usize);
             let src = if size == OperandSize::Word {
                 // Sign-extend word to long for address register
-                (data as i16) as i32 as u32
+                i32::from(data as i16) as u32
             } else {
                 data
             };
@@ -1156,7 +1156,7 @@ impl Instructions {
             // Immediate shift count
             // With immediate count: bits 11-9 = count (0=8), bits 2-0 = destination register
             let reg = (opcode & 0x07) as u8;
-            let mut count = ((opcode >> 9) & 0x07) as u32;
+            let mut count = u32::from((opcode >> 9) & 0x07);
             if count == 0 {
                 count = 8;
             }
@@ -1274,7 +1274,7 @@ impl Instructions {
         if is_signed {
             // Signed division - full 32-bit dividend divided by 16-bit divisor
             let dividend_signed = dividend as i32;
-            let divisor_signed = (divisor as i16) as i32;
+            let divisor_signed = i32::from(divisor as i16);
 
             // Check for overflow: -2^31 / -1 can't be represented
             if dividend_signed == i32::MIN && divisor_signed == -1 {
@@ -1287,17 +1287,17 @@ impl Instructions {
             let remainder = dividend_signed % divisor_signed;
 
             // Check if quotient fits in 16 bits
-            if quotient < i16::MIN as i32 || quotient > i16::MAX as i32 {
+            if quotient < i32::from(i16::MIN) || quotient > i32::from(i16::MAX) {
                 registers.set_v(true);
                 // N and Z are undefined on overflow
                 return InstructionResult::new(new_pc, 68);
             }
 
             // Store quotient in lower word, remainder in upper word
-            let result = ((remainder as u32) << 16) | (quotient as u16 as u32);
+            let result = ((remainder as u32) << 16) | u32::from(quotient as u16);
             registers.set_d(d_reg as usize, result);
             // Flags are based on 16-bit quotient
-            Self::set_logic_flags(registers, quotient as u16 as u32, OperandSize::Word);
+            Self::set_logic_flags(registers, u32::from(quotient as u16), OperandSize::Word);
         } else {
             // Unsigned division - full 32-bit dividend divided by 16-bit divisor
             let quotient = dividend / divisor;
@@ -1599,7 +1599,7 @@ impl Instructions {
         let dst_masked = dst & mask;
         let src_masked = src & mask;
 
-        let carry = carry_in as u32;
+        let carry = u32::from(carry_in);
         let result = dst_masked.wrapping_add(src_masked).wrapping_add(carry);
         let result_masked = result & mask;
 
@@ -1637,7 +1637,7 @@ impl Instructions {
         let dst_masked = dst & mask;
         let src_masked = src & mask;
 
-        let borrow = borrow_in as u32;
+        let borrow = u32::from(borrow_in);
         let result = dst_masked.wrapping_sub(src_masked).wrapping_sub(borrow);
         let result_masked = result & mask;
 
@@ -1667,7 +1667,7 @@ impl Instructions {
         } else if size == OperandSize::Word {
             0x8000
         } else {
-            0x80000000u32
+            0x8000_0000_u32
         };
 
         let a_neg = (a & sign_bit) != 0;
@@ -1682,7 +1682,7 @@ impl Instructions {
     fn check_add_carry(a: u32, b: u32, carry: u32, size: OperandSize) -> bool {
         if size == OperandSize::Long {
             // For long size, use u64 to properly detect overflow
-            (a as u64) + (b as u64) + (carry as u64) > u32::MAX as u64
+            u64::from(a) + u64::from(b) + u64::from(carry) > u64::from(u32::MAX)
         } else {
             let mask = size.mask();
             a.wrapping_add(b).wrapping_add(carry) & !mask != 0
@@ -1697,7 +1697,7 @@ impl Instructions {
         } else if size == OperandSize::Word {
             0x8000
         } else {
-            0x80000000u32
+            0x8000_0000_u32
         };
 
         let a_neg = (a & sign_bit) != 0;
@@ -1712,7 +1712,7 @@ impl Instructions {
     fn check_sub_carry(a: u32, b: u32, borrow: u32, size: OperandSize) -> bool {
         if size == OperandSize::Long {
             // For long size, use u64 to properly detect borrow
-            (b as u64) + (borrow as u64) > (a as u64)
+            u64::from(b) + u64::from(borrow) > u64::from(a)
         } else {
             let mask = size.mask();
             a.wrapping_sub(b).wrapping_sub(borrow) & !mask != 0
@@ -1933,7 +1933,7 @@ impl Instructions {
     ///
     /// # Arguments
     /// * `opcode` - The branch instruction opcode
-    /// * `pc` - The PC pointing past the opcode word (current_pc + 2)
+    /// * `pc` - The PC pointing past the opcode word (`current_pc` + 2)
     /// * `memory` - Memory reference for reading extension words
     ///
     /// # Returns
@@ -1943,11 +1943,11 @@ impl Instructions {
 
         if offset != 0 {
             // 8-bit displacement embedded in opcode
-            offset as i32
+            i32::from(offset)
         } else {
             // 16-bit displacement - read extension word from pc (which points right after opcode)
             let ext = memory.read_word_unchecked(pc) as i16;
-            ext as i32
+            i32::from(ext)
         }
     }
 
@@ -2045,7 +2045,7 @@ impl Instructions {
 
         // Sign-extend word to long if needed
         let final_value = if size == OperandSize::Word {
-            value as i16 as i32 as u32
+            i32::from(value as i16) as u32
         } else {
             value
         };
@@ -2094,9 +2094,9 @@ impl Instructions {
         let (immediate, pc_after_imm) = if size == OperandSize::Long {
             (memory.read_long_unchecked(pc), pc + 4)
         } else if size == OperandSize::Word {
-            (memory.read_word_unchecked(pc) as u32, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)), pc + 2)
         } else {
-            (memory.read_word_unchecked(pc) as u32 & 0xFF, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)) & 0xFF, pc + 2)
         };
 
         let addr_mode = match AddressingMode::from_mode_reg(ea_mode, ea_reg) {
@@ -2137,7 +2137,7 @@ impl Instructions {
         pc: u32,
     ) -> InstructionResult {
         // SUBQ encoding: 0101 data 1 size ea
-        let data = ((opcode >> 9) & 0x7) as u32;
+        let data = u32::from((opcode >> 9) & 0x7);
         let immediate = if data == 0 { 8 } else { data };
 
         let size_bits = (opcode >> 6) & 0x3;
@@ -2218,7 +2218,7 @@ impl Instructions {
 
         // Sign-extend if word
         let src_extended = if size == OperandSize::Word {
-            src_value as i16 as i32 as u32
+            i32::from(src_value as i16) as u32
         } else {
             src_value
         };
@@ -2275,9 +2275,9 @@ impl Instructions {
         let (immediate, pc_after_imm) = if size == OperandSize::Long {
             (memory.read_long_unchecked(pc), pc + 4)
         } else if size == OperandSize::Word {
-            (memory.read_word_unchecked(pc) as u32, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)), pc + 2)
         } else {
-            (memory.read_word_unchecked(pc) as u32 & 0xFF, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)) & 0xFF, pc + 2)
         };
 
         let addr_mode = match AddressingMode::from_mode_reg(ea_mode, ea_reg) {
@@ -2336,9 +2336,9 @@ impl Instructions {
         let (immediate, pc_after_imm) = if size == OperandSize::Long {
             (memory.read_long_unchecked(pc), pc + 4)
         } else if size == OperandSize::Word {
-            (memory.read_word_unchecked(pc) as u32, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)), pc + 2)
         } else {
-            (memory.read_word_unchecked(pc) as u32 & 0xFF, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)) & 0xFF, pc + 2)
         };
 
         let addr_mode = match AddressingMode::from_mode_reg(ea_mode, ea_reg) {
@@ -2400,9 +2400,9 @@ impl Instructions {
         let (immediate, pc_after_imm) = if size == OperandSize::Long {
             (memory.read_long_unchecked(pc), pc + 4)
         } else if size == OperandSize::Word {
-            (memory.read_word_unchecked(pc) as u32, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)), pc + 2)
         } else {
-            (memory.read_word_unchecked(pc) as u32 & 0xFF, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)) & 0xFF, pc + 2)
         };
 
         let addr_mode = match AddressingMode::from_mode_reg(ea_mode, ea_reg) {
@@ -2464,9 +2464,9 @@ impl Instructions {
         let (immediate, pc_after_imm) = if size == OperandSize::Long {
             (memory.read_long_unchecked(pc), pc + 4)
         } else if size == OperandSize::Word {
-            (memory.read_word_unchecked(pc) as u32, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)), pc + 2)
         } else {
-            (memory.read_word_unchecked(pc) as u32 & 0xFF, pc + 2)
+            (u32::from(memory.read_word_unchecked(pc)) & 0xFF, pc + 2)
         };
 
         let addr_mode = match AddressingMode::from_mode_reg(ea_mode, ea_reg) {
@@ -2501,7 +2501,7 @@ impl Instructions {
     #[allow(clippy::too_many_arguments)]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn nop(
+    pub const fn nop(
         _registers: &mut RegisterFile,
         _memory: &Memory,
         _opcode: u16,
@@ -2580,8 +2580,8 @@ impl Instructions {
             let ay_val = registers.a(ry as usize).wrapping_sub(bytes_y);
             registers.set_a(ry as usize, ay_val);
             let src = match size {
-                OperandSize::Byte => memory.read_byte_unchecked(ay_val) as u32,
-                OperandSize::Word => memory.read_word_unchecked(ay_val) as u32,
+                OperandSize::Byte => u32::from(memory.read_byte_unchecked(ay_val)),
+                OperandSize::Word => u32::from(memory.read_word_unchecked(ay_val)),
                 OperandSize::Long => memory.read_long_unchecked(ay_val),
             };
 
@@ -2589,8 +2589,8 @@ impl Instructions {
             let ax_val = registers.a(rx as usize).wrapping_sub(bytes_x);
             registers.set_a(rx as usize, ax_val);
             let dst = match size {
-                OperandSize::Byte => memory.read_byte_unchecked(ax_val) as u32,
-                OperandSize::Word => memory.read_word_unchecked(ax_val) as u32,
+                OperandSize::Byte => u32::from(memory.read_byte_unchecked(ax_val)),
+                OperandSize::Word => u32::from(memory.read_word_unchecked(ax_val)),
                 OperandSize::Long => memory.read_long_unchecked(ax_val),
             };
 
@@ -2709,8 +2709,8 @@ impl Instructions {
             let ay_val = registers.a(ry as usize).wrapping_sub(bytes_y);
             registers.set_a(ry as usize, ay_val);
             let src = match size {
-                OperandSize::Byte => memory.read_byte_unchecked(ay_val) as u32,
-                OperandSize::Word => memory.read_word_unchecked(ay_val) as u32,
+                OperandSize::Byte => u32::from(memory.read_byte_unchecked(ay_val)),
+                OperandSize::Word => u32::from(memory.read_word_unchecked(ay_val)),
                 OperandSize::Long => memory.read_long_unchecked(ay_val),
             };
 
@@ -2718,8 +2718,8 @@ impl Instructions {
             let ax_val = registers.a(rx as usize).wrapping_sub(bytes_x);
             registers.set_a(rx as usize, ax_val);
             let dst = match size {
-                OperandSize::Byte => memory.read_byte_unchecked(ax_val) as u32,
-                OperandSize::Word => memory.read_word_unchecked(ax_val) as u32,
+                OperandSize::Byte => u32::from(memory.read_byte_unchecked(ax_val)),
+                OperandSize::Word => u32::from(memory.read_word_unchecked(ax_val)),
                 OperandSize::Long => memory.read_long_unchecked(ax_val),
             };
 
@@ -2801,7 +2801,7 @@ impl Instructions {
         registers.set_d(reg, swapped);
 
         // Set flags
-        registers.set_n((swapped & 0x80000000) != 0);
+        registers.set_n((swapped & 0x8000_0000) != 0);
         registers.set_z(swapped == 0);
         registers.set_v(false);
         registers.set_c(false);
@@ -2852,7 +2852,7 @@ impl Instructions {
             let result = value << 1;
             let carry = (value & 0x8000) != 0;
 
-            EaResolver::write_operand(ea, OperandSize::Word, result as u32, registers, memory);
+            EaResolver::write_operand(ea, OperandSize::Word, u32::from(result), registers, memory);
 
             registers.set_n((result & 0x8000) != 0);
             registers.set_z(result == 0);
@@ -2964,7 +2964,7 @@ impl Instructions {
             let result = value >> 1;
             let carry = (value & 1) != 0;
 
-            EaResolver::write_operand(ea, OperandSize::Word, result as u32, registers, memory);
+            EaResolver::write_operand(ea, OperandSize::Word, u32::from(result), registers, memory);
 
             registers.set_n(false); // Always 0 for LSR
             registers.set_z(result == 0);
@@ -3079,9 +3079,9 @@ impl Instructions {
 
             let value = EaResolver::read_operand(ea, OperandSize::Word, registers, memory) as u16;
             let msb = (value & 0x8000) != 0;
-            let result = (value << 1) | if msb { 1 } else { 0 };
+            let result = (value << 1) | u16::from(msb);
 
-            EaResolver::write_operand(ea, OperandSize::Word, result as u32, registers, memory);
+            EaResolver::write_operand(ea, OperandSize::Word, u32::from(result), registers, memory);
 
             registers.set_n((result & 0x8000) != 0);
             registers.set_z(result == 0);
@@ -3196,7 +3196,7 @@ impl Instructions {
             let lsb = (value & 1) != 0;
             let result = (value >> 1) | if lsb { 0x8000 } else { 0 };
 
-            EaResolver::write_operand(ea, OperandSize::Word, result as u32, registers, memory);
+            EaResolver::write_operand(ea, OperandSize::Word, u32::from(result), registers, memory);
 
             registers.set_n((result & 0x8000) != 0);
             registers.set_z(result == 0);
@@ -3663,11 +3663,11 @@ impl Instructions {
                 EaResolver::resolve(addr_mode, ea_reg, OperandSize::Word, registers, memory, pc);
 
             let value = EaResolver::read_operand(ea, OperandSize::Word, registers, memory) as u16;
-            let x_bit = if registers.get_x() { 1u16 } else { 0 };
+            let x_bit = u16::from(registers.get_x());
             let msb = (value & 0x8000) != 0;
             let result = (value << 1) | x_bit;
 
-            EaResolver::write_operand(ea, OperandSize::Word, result as u32, registers, memory);
+            EaResolver::write_operand(ea, OperandSize::Word, u32::from(result), registers, memory);
 
             registers.set_n((result & 0x8000) != 0);
             registers.set_z(result == 0);
@@ -3707,7 +3707,7 @@ impl Instructions {
 
             for _ in 0..count {
                 let msb = (result & (1 << (bits - 1))) != 0;
-                result = (result << 1) | if x { 1 } else { 0 };
+                result = (result << 1) | u32::from(x);
                 x = msb;
             }
 
@@ -3775,7 +3775,7 @@ impl Instructions {
             let lsb = (value & 1) != 0;
             let result = (value >> 1) | x_bit;
 
-            EaResolver::write_operand(ea, OperandSize::Word, result as u32, registers, memory);
+            EaResolver::write_operand(ea, OperandSize::Word, u32::from(result), registers, memory);
 
             registers.set_n((result & 0x8000) != 0);
             registers.set_z(result == 0);
@@ -3853,7 +3853,7 @@ impl Instructions {
     #[allow(clippy::too_many_arguments)]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn exg(
+    pub const fn exg(
         registers: &mut RegisterFile,
         _memory: &Memory,
         opcode: u16,
@@ -4021,7 +4021,7 @@ impl Instructions {
         let an = (opcode & 0x7) as usize;
 
         // Read 16-bit displacement (sign extended)
-        let displacement = memory.read_word(pc).unwrap_or(0) as i16 as i32 as u32;
+        let displacement = i32::from(memory.read_word(pc).unwrap_or(0) as i16) as u32;
 
         // Push An onto stack
         let sp = registers.sp().wrapping_sub(4);
@@ -4116,7 +4116,7 @@ impl Instructions {
 
         // Set bit 7
         let result = value | 0x80;
-        EaResolver::write_operand(ea, OperandSize::Byte, result as u32, registers, memory);
+        EaResolver::write_operand(ea, OperandSize::Byte, u32::from(result), registers, memory);
 
         InstructionResult::new(new_pc, 4)
     }
@@ -4179,16 +4179,16 @@ impl Instructions {
         // Read from (Ay)+ then (Ax)+
         let addr_y = registers.a(ay);
         let src = match size {
-            OperandSize::Byte => memory.read_byte(addr_y).unwrap_or(0) as u32,
-            OperandSize::Word => memory.read_word(addr_y).unwrap_or(0) as u32,
+            OperandSize::Byte => u32::from(memory.read_byte(addr_y).unwrap_or(0)),
+            OperandSize::Word => u32::from(memory.read_word(addr_y).unwrap_or(0)),
             OperandSize::Long => memory.read_long(addr_y).unwrap_or(0),
         };
         registers.set_a(ay, addr_y.wrapping_add(increment_y));
 
         let addr_x = registers.a(ax);
         let dst = match size {
-            OperandSize::Byte => memory.read_byte(addr_x).unwrap_or(0) as u32,
-            OperandSize::Word => memory.read_word(addr_x).unwrap_or(0) as u32,
+            OperandSize::Byte => u32::from(memory.read_byte(addr_x).unwrap_or(0)),
+            OperandSize::Word => u32::from(memory.read_word(addr_x).unwrap_or(0)),
             OperandSize::Long => memory.read_long(addr_x).unwrap_or(0),
         };
         registers.set_a(ax, addr_x.wrapping_add(increment_x));
@@ -4253,9 +4253,9 @@ impl Instructions {
         let old_z = registers.get_z();
 
         // BCD addition with extend using UAE-style algorithm
-        let x = if registers.get_x() { 1i32 } else { 0 };
-        let src_i = src as i32;
-        let dst_i = dst as i32;
+        let x = i32::from(registers.get_x());
+        let src_i = i32::from(src);
+        let dst_i = i32::from(dst);
 
         // Full binary addition
         let res = src_i + dst_i + x;
@@ -4283,7 +4283,7 @@ impl Instructions {
         if let Some(addr) = result_addr {
             let _ = memory.write_byte(addr, result);
         } else {
-            registers.set_d(dx, (registers.d(dx) & 0xFFFFFF00) | result as u32);
+            registers.set_d(dx, (registers.d(dx) & 0xFFFF_FF00) | u32::from(result));
         }
 
         // Update flags
@@ -4364,13 +4364,13 @@ impl Instructions {
 
         // BCD subtraction with extend: dst - src - X
         // The algorithm matches Musashi/real M68K behavior for both valid and invalid BCD.
-        let x = if registers.get_x() { 1i32 } else { 0 };
-        let dst_i = dst as i32;
-        let src_i = src as i32;
+        let x = i32::from(registers.get_x());
+        let dst_i = i32::from(dst);
+        let src_i = i32::from(src);
 
         // Full binary subtraction (raw, before BCD correction)
         let mut result = dst_i - src_i - x;
-        let raw_msb = if (result & 0x80) != 0 { 1 } else { 0 };
+        let raw_msb = i32::from((result & 0x80) != 0);
 
         // Low nibble subtraction (for half-borrow detection)
         let lo = (dst_i & 0xf) - (src_i & 0xf) - x;
@@ -4394,7 +4394,7 @@ impl Instructions {
         if let Some(addr) = result_addr {
             let _ = memory.write_byte(addr, result);
         } else {
-            registers.set_d(dx, (registers.d(dx) & 0xFFFFFF00) | result as u32);
+            registers.set_d(dx, (registers.d(dx) & 0xFFFF_FF00) | u32::from(result));
         }
 
         // Update flags
@@ -4462,12 +4462,12 @@ impl Instructions {
 
         // NBCD: 0 - dst - X (ten's complement negation in BCD)
         // Same algorithm as SBCD with src=dst, dst=0
-        let x = if registers.get_x() { 1i32 } else { 0 };
-        let dst_i = dst as i32;
+        let x = i32::from(registers.get_x());
+        let dst_i = i32::from(dst);
 
         // Full binary subtraction from 0 (raw, before BCD correction)
         let mut result = 0 - dst_i - x;
-        let raw_msb = if (result & 0x80) != 0 { 1 } else { 0 };
+        let raw_msb = i32::from((result & 0x80) != 0);
 
         // Low nibble subtraction (for half-borrow detection)
         let lo = 0 - (dst_i & 0xf) - x;
@@ -4487,7 +4487,7 @@ impl Instructions {
         let result = (result & 0xFF) as u8;
         let result_msb = (result >> 7) & 1;
 
-        EaResolver::write_operand(ea, OperandSize::Byte, result as u32, registers, memory);
+        EaResolver::write_operand(ea, OperandSize::Byte, u32::from(result), registers, memory);
 
         // Update flags
         // N and V are officially "undefined" but real hardware (and MAME) has specific behavior
@@ -4512,12 +4512,12 @@ impl Instructions {
         InstructionResult::new(new_pc, 6)
     }
 
-    /// DBcc - Test Condition, Decrement and Branch.
+    /// `DBcc` - Test Condition, Decrement and Branch.
     ///
     /// Tests condition; if false, decrements Dn and branches if Dn != -1.
     /// Used for counted loops.
     ///
-    /// Reference: m68k-instruction-set.txt - DBcc
+    /// Reference: m68k-instruction-set.txt - `DBcc`
     ///
     /// # Flags
     /// None affected.
@@ -4538,7 +4538,7 @@ impl Instructions {
         let condition = ((opcode >> 8) & 0x0F) as u8;
 
         // Read 16-bit displacement (from current pc location)
-        let displacement = memory.read_word(pc).unwrap_or(0) as i16 as i32;
+        let displacement = i32::from(memory.read_word(pc).unwrap_or(0) as i16);
 
         // Test condition
         if Self::test_condition(condition, registers) {
@@ -4550,7 +4550,7 @@ impl Instructions {
             let count = (registers.d(dn) as u16).wrapping_sub(1);
             // Only modify the low word of the register
             let current = registers.d(dn);
-            registers.set_d(dn, (current & 0xFFFF0000) | (count as u32));
+            registers.set_d(dn, (current & 0xFFFF_0000) | u32::from(count));
 
             if count == 0xFFFF {
                 // Counter expired (-1) - don't branch
@@ -4728,7 +4728,7 @@ impl Instructions {
             for i in 0..8 {
                 if (mask & (1 << i)) != 0 {
                     let value = if size == OperandSize::Word {
-                        memory.read_word(addr).unwrap_or(0) as i16 as i32 as u32
+                        i32::from(memory.read_word(addr).unwrap_or(0) as i16) as u32
                     } else {
                         memory.read_long(addr).unwrap_or(0)
                     };
@@ -4739,7 +4739,7 @@ impl Instructions {
             for i in 0..8 {
                 if (mask & (1 << (8 + i))) != 0 {
                     let value = if size == OperandSize::Word {
-                        memory.read_word(addr).unwrap_or(0) as i16 as i32 as u32
+                        i32::from(memory.read_word(addr).unwrap_or(0) as i16) as u32
                     } else {
                         memory.read_long(addr).unwrap_or(0)
                     };
@@ -4820,7 +4820,7 @@ impl Instructions {
     #[allow(clippy::too_many_arguments)]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn trap(
+    pub const fn trap(
         _registers: &RegisterFile,
         _memory: &Memory,
         opcode: u16,
@@ -4986,7 +4986,7 @@ impl Instructions {
     #[allow(clippy::too_many_arguments)]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn reset(
+    pub const fn reset(
         registers: &RegisterFile,
         _memory: &Memory,
         _opcode: u16,
@@ -5009,7 +5009,7 @@ impl Instructions {
     /// Reference: m68k-instruction-set.txt - ANDI to CCR
     ///
     /// # Flags
-    /// All flags ANDed with immediate value.
+    /// All flags `ANDed` with immediate value.
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
@@ -5027,7 +5027,7 @@ impl Instructions {
         let ccr = registers.get_ccr();
         let ccr_byte = ccr.to_sr() as u8;
         let new_ccr_byte = ccr_byte & imm;
-        registers.set_ccr(CcrFlags::from_sr(new_ccr_byte as u16));
+        registers.set_ccr(CcrFlags::from_sr(u16::from(new_ccr_byte)));
 
         InstructionResult::new(pc + 2, 20)
     }
@@ -5039,7 +5039,7 @@ impl Instructions {
     /// Reference: m68k-instruction-set.txt - EORI to CCR
     ///
     /// # Flags
-    /// All flags XORed with immediate value.
+    /// All flags `XORed` with immediate value.
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
@@ -5057,7 +5057,7 @@ impl Instructions {
         let ccr = registers.get_ccr();
         let ccr_byte = ccr.to_sr() as u8;
         let new_ccr_byte = ccr_byte ^ imm;
-        registers.set_ccr(CcrFlags::from_sr(new_ccr_byte as u16));
+        registers.set_ccr(CcrFlags::from_sr(u16::from(new_ccr_byte)));
 
         InstructionResult::new(pc + 2, 20)
     }
@@ -5069,7 +5069,7 @@ impl Instructions {
     /// Reference: m68k-instruction-set.txt - ORI to CCR
     ///
     /// # Flags
-    /// All flags ORed with immediate value.
+    /// All flags `ORed` with immediate value.
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
@@ -5087,7 +5087,7 @@ impl Instructions {
         let ccr = registers.get_ccr();
         let ccr_byte = ccr.to_sr() as u8;
         let new_ccr_byte = ccr_byte | imm;
-        registers.set_ccr(CcrFlags::from_sr(new_ccr_byte as u16));
+        registers.set_ccr(CcrFlags::from_sr(u16::from(new_ccr_byte)));
 
         InstructionResult::new(pc + 2, 20)
     }
@@ -5100,7 +5100,7 @@ impl Instructions {
     /// Reference: m68k-instruction-set.txt - ANDI to SR
     ///
     /// # Flags
-    /// All bits ANDed with immediate value.
+    /// All bits `ANDed` with immediate value.
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
@@ -5135,7 +5135,7 @@ impl Instructions {
     /// Reference: m68k-instruction-set.txt - EORI to SR
     ///
     /// # Flags
-    /// All bits XORed with immediate value.
+    /// All bits `XORed` with immediate value.
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
@@ -5170,7 +5170,7 @@ impl Instructions {
     /// Reference: m68k-instruction-set.txt - ORI to SR
     ///
     /// # Flags
-    /// All bits ORed with immediate value.
+    /// All bits `ORed` with immediate value.
     /// Edge cases: None beyond standard M68K addressing and size rules.
     // Allow clippy::too_many_arguments: instruction handlers mirror M68K operand shapes.
     #[allow(clippy::too_many_arguments)]
@@ -5230,7 +5230,7 @@ impl Instructions {
         // Read SR and mask reserved bits
         // Valid bits: 0-4 (CCR flags), 8-10 (interrupt mask), 13 (supervisor)
         // Reserved bits 5-7 and 11 always read as 0
-        let sr = (registers.sr & 0x271F) as u32;
+        let sr = u32::from(registers.sr & 0x271F);
 
         EaResolver::write_operand(ea, OperandSize::Word, sr, registers, memory);
 
@@ -5332,7 +5332,7 @@ impl Instructions {
     #[allow(clippy::too_many_arguments)]
     // Allow dead code: kept for tests, completeness, or CLI-only usage.
     #[allow(dead_code)]
-    pub fn move_usp(
+    pub const fn move_usp(
         registers: &mut RegisterFile,
         _memory: &Memory,
         opcode: u16,
@@ -5392,7 +5392,7 @@ impl Instructions {
         let opmode = (opcode >> 6) & 0x7;
 
         // Read 16-bit displacement (sign-extended)
-        let displacement = memory.read_word(pc).unwrap_or(0) as i16 as i32;
+        let displacement = i32::from(memory.read_word(pc).unwrap_or(0) as i16);
         let new_pc = pc + 2;
 
         let base_addr = (registers.a(an) as i32).wrapping_add(displacement) as u32;
@@ -5400,18 +5400,18 @@ impl Instructions {
         match opmode {
             0b100 => {
                 // Memory to register, word
-                let b0 = memory.read_byte(base_addr).unwrap_or(0) as u32;
-                let b1 = memory.read_byte(base_addr.wrapping_add(2)).unwrap_or(0) as u32;
+                let b0 = u32::from(memory.read_byte(base_addr).unwrap_or(0));
+                let b1 = u32::from(memory.read_byte(base_addr.wrapping_add(2)).unwrap_or(0));
                 let value = (b0 << 8) | b1;
                 // Only modify low word of register
-                registers.set_d(dn, (registers.d(dn) & 0xFFFF0000) | value);
+                registers.set_d(dn, (registers.d(dn) & 0xFFFF_0000) | value);
             }
             0b101 => {
                 // Memory to register, long
-                let b0 = memory.read_byte(base_addr).unwrap_or(0) as u32;
-                let b1 = memory.read_byte(base_addr.wrapping_add(2)).unwrap_or(0) as u32;
-                let b2 = memory.read_byte(base_addr.wrapping_add(4)).unwrap_or(0) as u32;
-                let b3 = memory.read_byte(base_addr.wrapping_add(6)).unwrap_or(0) as u32;
+                let b0 = u32::from(memory.read_byte(base_addr).unwrap_or(0));
+                let b1 = u32::from(memory.read_byte(base_addr.wrapping_add(2)).unwrap_or(0));
+                let b2 = u32::from(memory.read_byte(base_addr.wrapping_add(4)).unwrap_or(0));
+                let b3 = u32::from(memory.read_byte(base_addr.wrapping_add(6)).unwrap_or(0));
                 let value = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
                 registers.set_d(dn, value);
             }

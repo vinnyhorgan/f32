@@ -1,6 +1,6 @@
-//! CompactFlash Card Emulation for SBC-Compatible System
+//! `CompactFlash` Card Emulation for SBC-Compatible System
 //!
-//! This module emulates an IDE/ATA CompactFlash card in True IDE 16-bit mode.
+//! This module emulates an IDE/ATA `CompactFlash` card in True IDE 16-bit mode.
 //! The CF card is memory-mapped at $900000 with the standard IDE task file registers.
 //!
 //! ## Register Map (offsets from $900000)
@@ -37,7 +37,7 @@ use std::io::{self, Read};
 use std::path::Path;
 
 /// Base address of the CF card in the system memory map
-pub const CF_BASE: u32 = 0x900000;
+pub const CF_BASE: u32 = 0x0090_0000;
 
 /// Sector size in bytes
 pub const SECTOR_SIZE: usize = 512;
@@ -119,7 +119,7 @@ pub mod commands {
     pub const WRITE_SECTORS_NR: u8 = 0x31;
 }
 
-/// CompactFlash card emulation
+/// `CompactFlash` card emulation
 #[derive(Clone)]
 pub struct CfCard {
     /// Disk image data
@@ -256,7 +256,7 @@ impl CfCard {
 
     /// Returns the total capacity in bytes
     #[must_use]
-    pub fn capacity(&self) -> u64 {
+    pub const fn capacity(&self) -> u64 {
         self.data.len() as u64
     }
 
@@ -381,8 +381,8 @@ impl CfCard {
 
     /// Reads a 16-bit word from the data register
     pub fn read_data_word(&mut self) -> u16 {
-        let hi = self.read_data() as u16;
-        let lo = self.read_data() as u16;
+        let hi = u16::from(self.read_data());
+        let lo = u16::from(self.read_data());
         (hi << 8) | lo
     }
 
@@ -417,15 +417,15 @@ impl CfCard {
 
     /// Gets the current LBA from the task file registers
     fn get_lba(&self) -> u32 {
-        let lba0 = self.lba0 as u32;
-        let lba1 = self.lba1 as u32;
-        let lba2 = self.lba2 as u32;
-        let lba3 = (self.drive_head & 0x0F) as u32;
+        let lba0 = u32::from(self.lba0);
+        let lba1 = u32::from(self.lba1);
+        let lba2 = u32::from(self.lba2);
+        let lba3 = u32::from(self.drive_head & 0x0F);
         lba0 | (lba1 << 8) | (lba2 << 16) | (lba3 << 24)
     }
 
     /// Sets the LBA in the task file registers
-    fn set_lba(&mut self, lba: u32) {
+    const fn set_lba(&mut self, lba: u32) {
         self.lba0 = lba as u8;
         self.lba1 = (lba >> 8) as u8;
         self.lba2 = (lba >> 16) as u8;

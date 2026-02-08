@@ -1,7 +1,7 @@
 //! SBC-Compatible Single Board Computer Emulation
 //!
 //! This module provides a complete emulation of a small 68k SBC, tying together
-//! the CPU core, memory bus, UART, and CompactFlash peripherals.
+//! the CPU core, memory bus, UART, and `CompactFlash` peripherals.
 //!
 //! ## Hardware Specifications
 //!
@@ -9,7 +9,7 @@
 //! - **RAM**: 1MB SRAM at $C00000-$CFFFFF (mirrored at $E00000-$EFFFFF)
 //! - **ROM**: 64KB EEPROM repeated across two 1MB windows due to minimal decode
 //! - **UART**: 16550 at $A00000 (serial terminal at 57600 baud)
-//! - **Storage**: CompactFlash (True IDE mode) at $900000
+//! - **Storage**: `CompactFlash` (True IDE mode) at $900000
 //! - **RTC**: DS3234 via SPI on UART modem control lines
 //!
 //! ## Memory Map
@@ -43,7 +43,7 @@
 //! 1. CPU reads initial SSP from $000000 and initial PC from $000004
 //! 2. ROM initializes UART to 57600 baud
 //! 3. RAM test is performed
-//! 4. If CompactFlash present, FAT16 is mounted
+//! 4. If `CompactFlash` present, FAT16 is mounted
 //! 5. If STARTUP.BIN exists and button not held, it's executed
 //! 6. Otherwise, enters command shell
 //!
@@ -72,16 +72,16 @@ pub const CLOCK_HZ: u32 = 12_000_000;
 pub const DEFAULT_BAUD: u32 = 57600;
 
 /// RAM base address
-pub const RAM_BASE: u32 = 0xC00000;
+pub const RAM_BASE: u32 = 0x00C0_0000;
 
 /// RAM mirror base address
-pub const RAM_MIRROR: u32 = 0xE00000;
+pub const RAM_MIRROR: u32 = 0x00E0_0000;
 
 /// Application load address (256 bytes past RAM start for system variables)
-pub const APP_START: u32 = 0xE00100;
+pub const APP_START: u32 = 0x00E0_0100;
 
 /// Initial stack pointer (end of RAM)
-pub const INITIAL_SP: u32 = 0xF00000;
+pub const INITIAL_SP: u32 = 0x00F0_0000;
 
 /// ROM size (64KB)
 pub const ROM_SIZE: usize = 64 * 1024;
@@ -95,24 +95,24 @@ static EMBEDDED_ROM: &[u8] = include_bytes!("../assets/rom.bin");
 
 // System variable addresses (in RAM at E00000)
 // These must be initialized before running apps directly without ROM boot
-const OUTCH_VEC: u32 = 0xE00000;
+const OUTCH_VEC: u32 = 0x00E0_0000;
 #[allow(dead_code)]
-const INCH_VEC: u32 = 0xE00004;
+const INCH_VEC: u32 = 0x00E0_0004;
 #[allow(dead_code)]
-const HEXDIGITS_VEC: u32 = 0xE00008;
+const HEXDIGITS_VEC: u32 = 0x00E0_0008;
 #[allow(dead_code)]
-const SEPARATORS_VEC: u32 = 0xE0000C;
+const SEPARATORS_VEC: u32 = 0x00E0_000C;
 
 // ROM addresses for I/O routines (determined from rom.lst)
 #[allow(dead_code)]
-const UART_OUTCHAR_ADDR: u32 = 0x00001186;
+const UART_OUTCHAR_ADDR: u32 = 0x0000_1186;
 #[allow(dead_code)]
-const UART_INCHAR_ADDR: u32 = 0x00001198;
+const UART_INCHAR_ADDR: u32 = 0x0000_1198;
 #[allow(dead_code)]
-const HEXDIGITS_UC_ADDR: u32 = 0x000014EE;
+const HEXDIGITS_UC_ADDR: u32 = 0x0000_14EE;
 // SEPARATORS value: hyphen, colon, comma, null
 #[allow(dead_code)]
-const SEPARATORS_VALUE: u32 = 0x2d3a2c00;
+const SEPARATORS_VALUE: u32 = 0x2d3a_2c00;
 
 // Global peripheral pointers for MMIO hooks (replaces thread-locals)
 // Safety: These pointers are only dereferenced while holding the SBC mutex,
@@ -144,7 +144,7 @@ fn decode_address(address: u32) -> SbcAddressRegion {
     let uart_sel = a23 == 1 && a22 == 0 && a21 == 1;
     let card_sel = a20 == 1;
 
-    let selected = rom_sel as u8 + ram_sel as u8 + uart_sel as u8 + card_sel as u8;
+    let selected = u8::from(rom_sel) + u8::from(ram_sel) + u8::from(uart_sel) + u8::from(card_sel);
     if selected == 0 {
         return SbcAddressRegion::OpenBus;
     }
@@ -248,13 +248,13 @@ fn sbc_write_hook(address: u32, value: u32, size: OperandSize) -> WriteHookResul
 /// - ROM at $000000 (mirrored)
 /// - RAM at $C00000/$E00000
 /// - UART at $A00000
-/// - CompactFlash at $900000
+/// - `CompactFlash` at $900000
 pub struct Sbc {
     /// The CPU core (uses 16MB flat memory for simplicity)
     cpu: Cpu,
     /// UART peripheral
     uart: Rc<RefCell<Uart16550>>,
-    /// CompactFlash card
+    /// `CompactFlash` card
     cfcard: Rc<RefCell<CfCard>>,
     /// ROM data (for read interception)
     rom_data: Vec<u8>,
@@ -285,8 +285,8 @@ impl Sbc {
 
         // Register peripherals in global atomic pointers
         // Safety: These are only dereferenced while holding the SBC mutex
-        SBC_UART_PTR.store(Rc::as_ptr(&uart) as *mut _, Ordering::Release);
-        SBC_CFCARD_PTR.store(Rc::as_ptr(&cfcard) as *mut _, Ordering::Release);
+        SBC_UART_PTR.store(Rc::as_ptr(&uart).cast_mut(), Ordering::Release);
+        SBC_CFCARD_PTR.store(Rc::as_ptr(&cfcard).cast_mut(), Ordering::Release);
 
         // Initialize CPU for supervisor mode
         cpu.set_sr(0x2700); // Supervisor mode, interrupts masked
@@ -321,8 +321,8 @@ impl Sbc {
         self.sync_rom_to_memory();
 
         // Read reset vectors
-        let ssp = self.cpu.memory.read_long(0x000000).unwrap_or(0);
-        let pc = self.cpu.memory.read_long(0x000004).unwrap_or(0);
+        let ssp = self.cpu.memory.read_long(0x0000_0000).unwrap_or(0);
+        let pc = self.cpu.memory.read_long(0x0000_0004).unwrap_or(0);
 
         // Reset CPU
         self.cpu.reset();
@@ -344,7 +344,7 @@ impl Sbc {
     fn sync_rom_to_memory(&mut self) {
         // ROM repeats every 64KB within two 1MB windows:
         // $000000-$0FFFFF and $200000-$2FFFFF.
-        let bases = [0x000000u32, 0x200000u32];
+        let bases = [0x0000_0000_u32, 0x0020_0000_u32];
         for base in bases {
             for mirror in 0..16u32 {
                 let addr = base + mirror * (ROM_SIZE as u32);
@@ -367,7 +367,7 @@ impl Sbc {
             let vec_addr = 0x80 + i * 4; // TRAP #0 is vector 32 = offset $80
             if let Ok(old_handler) = self.cpu.memory.read_long(vec_addr) {
                 // Only fix vectors that point into ROM (< $100000) and aren't $FFFFFFFF
-                if old_handler < 0x100000 && old_handler != 0xFFFFFFFF {
+                if old_handler < 0x0010_0000 && old_handler != 0xFFFF_FFFF {
                     let _ = self
                         .cpu
                         .memory
@@ -417,17 +417,17 @@ impl Sbc {
         Ok(())
     }
 
-    /// Loads a CompactFlash disk image
+    /// Loads a `CompactFlash` disk image
     pub fn load_cf_image(&mut self, path: &Path) -> io::Result<()> {
         self.cfcard.borrow_mut().load_image(path)
     }
 
-    /// Loads a CompactFlash disk image from bytes
+    /// Loads a `CompactFlash` disk image from bytes
     pub fn load_cf_bytes(&mut self, data: &[u8]) {
         self.cfcard.borrow_mut().load_bytes(data);
     }
 
-    /// Ejects the CompactFlash card
+    /// Ejects the `CompactFlash` card
     pub fn eject_cf(&mut self) {
         self.cfcard.borrow_mut().eject();
     }
@@ -455,8 +455,8 @@ impl Sbc {
     ///
     /// Instead of relying on ROM TRAP handlers (which have address mismatches
     /// in the current ROM binary), this installs small handler stubs directly
-    /// in RAM at $E00080. These stubs handle the core syscalls (Exit, OutChar,
-    /// OutStr, InChar) by directly accessing the UART hardware.
+    /// in RAM at $E00080. These stubs handle the core syscalls (Exit, `OutChar`,
+    /// `OutStr`, `InChar`) by directly accessing the UART hardware.
     pub fn run_app(&mut self) {
         // Install TRAP handler stubs in RAM at $E00080 (within the 256-byte
         // system area, below the app load address at $E00100)
@@ -482,8 +482,14 @@ impl Sbc {
         reason = "addr is incremented sequentially during instruction writing"
     )]
     fn install_trap_stubs(&mut self) {
+        // Helper function to write trap vectors
+        fn write_vec(mem: &mut crate::memory::Memory, vec_addr: u32, handler: u32) {
+            let bytes = handler.to_be_bytes();
+            let _ = mem.load_binary(vec_addr, &bytes);
+        }
+
         // Base address for stubs (in system variable area)
-        let stub_base: u32 = 0xE00080;
+        let stub_base: u32 = 0x00E0_0080;
         let mut addr = stub_base;
 
         // Helper to write a word and advance
@@ -506,10 +512,8 @@ impl Sbc {
         let trap2_addr = addr;
         let _ = mem.write_word(addr, 0x43F9);
         addr += 2; // LEA.L
-        let _ = mem.write_long(addr, 0x00A00000);
+        let _ = mem.write_long(addr, 0x00A0_0000);
         addr += 4; // $A00000
-                   // .wait:
-        let _wait_addr = addr;
         let _ = mem.write_word(addr, 0x0829);
         addr += 2; // BTST #imm,(d,An)
         let _ = mem.write_word(addr, 0x0005);
@@ -541,10 +545,8 @@ impl Sbc {
         addr += 2; // D0/A0-A1
         let _ = mem.write_word(addr, 0x43F9);
         addr += 2; // LEA.L
-        let _ = mem.write_long(addr, 0x00A00000);
+        let _ = mem.write_long(addr, 0x00A0_0000);
         addr += 4; // $A00000
-                   // .loop:
-        let _loop_addr = addr;
         let _ = mem.write_word(addr, 0x1018);
         addr += 2; // MOVE.B (A0)+,D0
         let _ = mem.write_word(addr, 0x670C);
@@ -579,7 +581,7 @@ impl Sbc {
         let trap5_addr = addr;
         let _ = mem.write_word(addr, 0x43F9);
         addr += 2;
-        let _ = mem.write_long(addr, 0x00A00000);
+        let _ = mem.write_long(addr, 0x00A0_0000);
         addr += 4;
         let _ = mem.write_word(addr, 0x0829);
         addr += 2; // BTST
@@ -598,10 +600,6 @@ impl Sbc {
         // IMPORTANT: use load_binary (not write_long) because the vector table
         // is in the ROM region ($000080-$00009F) and write_long goes through
         // the write hook which blocks writes to ROM addresses.
-        fn write_vec(mem: &mut crate::memory::Memory, vec_addr: u32, handler: u32) {
-            let bytes = handler.to_be_bytes();
-            let _ = mem.load_binary(vec_addr, &bytes);
-        }
         write_vec(mem, 0x80, trap0_addr); // TRAP #0 = Exit
         write_vec(mem, 0x84, trap0_addr); // TRAP #1 = halt too
         write_vec(mem, 0x88, trap2_addr); // TRAP #2 = OutChar
@@ -626,19 +624,19 @@ impl Sbc {
 
     /// Returns true if the CPU is halted
     #[must_use]
-    pub fn is_halted(&self) -> bool {
+    pub const fn is_halted(&self) -> bool {
         self.cpu.is_halted()
     }
 
     /// Returns the current program counter
     #[must_use]
-    pub fn pc(&self) -> u32 {
+    pub const fn pc(&self) -> u32 {
         self.cpu.pc()
     }
 
     /// Returns the current status register
     #[must_use]
-    pub fn sr(&self) -> u16 {
+    pub const fn sr(&self) -> u16 {
         self.cpu.sr()
     }
 
@@ -650,7 +648,7 @@ impl Sbc {
 
     /// Returns total cycles executed
     #[must_use]
-    pub fn cycles(&self) -> u64 {
+    pub const fn cycles(&self) -> u64 {
         self.cpu.total_cycles()
     }
 
@@ -662,10 +660,10 @@ impl Sbc {
     /// Receives a character from the UART transmit buffer (to terminal)
     /// Drains from the accumulated output buffer first, then checks TX FIFO.
     pub fn recv_char(&mut self) -> Option<u8> {
-        if !self.uart_output.is_empty() {
-            Some(self.uart_output.remove(0))
-        } else {
+        if self.uart_output.is_empty() {
             self.uart.borrow_mut().pop_tx()
+        } else {
+            Some(self.uart_output.remove(0))
         }
     }
 
@@ -734,22 +732,22 @@ impl Sbc {
     }
 
     /// Provides mutable access to the underlying CPU
-    pub fn cpu_mut(&mut self) -> &mut Cpu {
+    pub const fn cpu_mut(&mut self) -> &mut Cpu {
         &mut self.cpu
     }
 
     /// Provides access to the underlying CPU
-    pub fn cpu(&self) -> &Cpu {
+    pub const fn cpu(&self) -> &Cpu {
         &self.cpu
     }
 
     /// Returns a reference to CPU registers
-    pub fn registers(&self) -> &crate::registers::RegisterFile {
+    pub const fn registers(&self) -> &crate::registers::RegisterFile {
         &self.cpu.registers
     }
 
     /// Returns a mutable reference to CPU registers
-    pub fn registers_mut(&mut self) -> &mut crate::registers::RegisterFile {
+    pub const fn registers_mut(&mut self) -> &mut crate::registers::RegisterFile {
         &mut self.cpu.registers
     }
 }

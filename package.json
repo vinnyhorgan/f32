@@ -11,7 +11,7 @@
     "lint": "eslint . --max-warnings 0 && tsc --noEmit",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write . && taplo format src-tauri/Cargo.toml",
-    "check": "pnpm format && pnpm lint && pnpm test:run && cd src-tauri && cargo fmt -- --check && cargo clippy -- -D warnings && cargo test -- --test-threads=1",
+    "check": "pnpm format && pnpm lint && pnpm test:run && cd src-tauri && cargo fmt -- --check && cargo clippy -- -W clippy::pedantic -W clippy::nursery -D warnings && cargo test -- --test-threads=1",
     "test": "vitest",
     "test:run": "vitest run",
     "prepare": "husky"
@@ -42,6 +42,8 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.4.1",
+    "@commitlint/config-conventional": "^20.4.1",
     "@eslint/compat": "^2.0.2",
     "@eslint/js": "^9.17.0",
     "@taplo/cli": "^0.7.0",

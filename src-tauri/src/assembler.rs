@@ -32,7 +32,7 @@ impl std::fmt::Display for SourceLoc {
 }
 
 /// Token types produced by the lexer.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)] // Some variants reserved for future expression features
 pub enum Token {
     /// Identifier (label, instruction, register name)
@@ -140,8 +140,7 @@ impl<'a> Lexer<'a> {
             .chars
             .clone()
             .next()
-            .map(|(p, _)| p)
-            .unwrap_or(self.current_pos + 1);
+            .map_or(self.current_pos + 1, |(p, _)| p);
         SourceLoc {
             file: self.file.clone(),
             line: self.line,
@@ -217,7 +216,7 @@ impl<'a> Lexer<'a> {
             }
         }
         s.parse::<i64>()
-            .map_err(|_| format!("invalid decimal number: {}", s))
+            .map_err(|_| format!("invalid decimal number: {s}"))
     }
 
     /// Reads a hexadecimal number (after $ prefix).
@@ -234,7 +233,7 @@ impl<'a> Lexer<'a> {
         if s.is_empty() {
             return Err("expected hexadecimal digits after $".to_string());
         }
-        i64::from_str_radix(&s, 16).map_err(|_| format!("invalid hex number: ${}", s))
+        i64::from_str_radix(&s, 16).map_err(|_| format!("invalid hex number: ${s}"))
     }
 
     /// Reads a binary number (after % prefix).
@@ -251,7 +250,7 @@ impl<'a> Lexer<'a> {
         if s.is_empty() {
             return Err("expected binary digits after %".to_string());
         }
-        i64::from_str_radix(&s, 2).map_err(|_| format!("invalid binary number: %{}", s))
+        i64::from_str_radix(&s, 2).map_err(|_| format!("invalid binary number: %{s}"))
     }
 
     /// Reads a string literal (after opening quote).
@@ -315,16 +314,15 @@ impl<'a> Lexer<'a> {
                         if lower == "b" || lower == "w" || lower == "l" || lower == "s" {
                             // Return it as .X identifier - parser will decide
                             return Ok(LocatedToken {
-                                token: Token::Ident(format!(".{}", rest)),
-                                loc,
-                            });
-                        } else {
-                            // Multi-character or starts with digit: local label
-                            return Ok(LocatedToken {
-                                token: Token::Ident(format!(".{}", rest)),
+                                token: Token::Ident(format!(".{rest}")),
                                 loc,
                             });
                         }
+                        // Multi-character or starts with digit: local label
+                        return Ok(LocatedToken {
+                            token: Token::Ident(format!(".{rest}")),
+                            loc,
+                        });
                     }
                 }
                 Token::Dot
@@ -410,7 +408,7 @@ impl<'a> Lexer<'a> {
                 let s = self.read_ident(c);
                 Token::Ident(s)
             }
-            c => return Err(format!("unexpected character: '{}'", c)),
+            c => return Err(format!("unexpected character: '{c}'")),
         };
 
         Ok(LocatedToken { token, loc })
@@ -445,15 +443,15 @@ pub enum Expr {
     /// Current program counter (*)
     CurrentPc,
     /// Unary negation
-    Neg(Box<Expr>),
+    Neg(Box<Self>),
     /// Bitwise NOT
-    Not(Box<Expr>),
+    Not(Box<Self>),
     /// Binary operation
-    BinOp(Box<Expr>, BinOp, Box<Expr>),
+    BinOp(Box<Self>, BinOp, Box<Self>),
 }
 
 /// Binary operators in expressions.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
     Add,
     Sub,
@@ -475,15 +473,15 @@ pub enum BinOp {
 
 impl BinOp {
     /// Returns operator precedence (higher = tighter binding).
-    fn precedence(self) -> u8 {
+    const fn precedence(self) -> u8 {
         match self {
-            BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => 1,
-            BinOp::Or => 2,
-            BinOp::Xor => 3,
-            BinOp::And => 4,
-            BinOp::Shl | BinOp::Shr => 5,
-            BinOp::Add | BinOp::Sub => 6,
-            BinOp::Mul | BinOp::Div | BinOp::Mod => 7,
+            Self::Eq | Self::Ne | Self::Lt | Self::Gt | Self::Le | Self::Ge => 1,
+            Self::Or => 2,
+            Self::Xor => 3,
+            Self::And => 4,
+            Self::Shl | Self::Shr => 5,
+            Self::Add | Self::Sub => 6,
+            Self::Mul | Self::Div | Self::Mod => 7,
         }
     }
 }
@@ -495,7 +493,7 @@ pub struct ExprParser<'a> {
 }
 
 impl<'a> ExprParser<'a> {
-    pub fn new(tokens: &'a [LocatedToken]) -> Self {
+    pub const fn new(tokens: &'a [LocatedToken]) -> Self {
         Self { tokens, pos: 0 }
     }
 
@@ -635,15 +633,15 @@ pub fn eval_expr_scoped(
             // If it's a local label and we have a scope, try expanded form
             if name.starts_with('.') {
                 if let Some(scope) = scope {
-                    let expanded = format!("{}{}", scope, name);
+                    let expanded = format!("{scope}{name}");
                     if let Some(&v) = symbols.get(&expanded) {
                         return Ok(v);
                     }
                 }
             }
-            Err(format!("undefined symbol: {}", name))
+            Err(format!("undefined symbol: {name}"))
         }
-        Expr::CurrentPc => Ok(pc as i64),
+        Expr::CurrentPc => Ok(i64::from(pc)),
         Expr::Neg(e) => Ok(-eval_expr_scoped(e, symbols, pc, scope)?),
         Expr::Not(e) => Ok(!eval_expr_scoped(e, symbols, pc, scope)?),
         Expr::BinOp(l, op, r) => {
@@ -670,12 +668,12 @@ pub fn eval_expr_scoped(
                 BinOp::Xor => lv ^ rv,
                 BinOp::Shl => lv << (rv & 63),
                 BinOp::Shr => ((lv as u64) >> (rv & 63)) as i64,
-                BinOp::Eq => (lv == rv) as i64,
-                BinOp::Ne => (lv != rv) as i64,
-                BinOp::Lt => (lv < rv) as i64,
-                BinOp::Gt => (lv > rv) as i64,
-                BinOp::Le => (lv <= rv) as i64,
-                BinOp::Ge => (lv >= rv) as i64,
+                BinOp::Eq => i64::from(lv == rv),
+                BinOp::Ne => i64::from(lv != rv),
+                BinOp::Lt => i64::from(lv < rv),
+                BinOp::Gt => i64::from(lv > rv),
+                BinOp::Le => i64::from(lv <= rv),
+                BinOp::Ge => i64::from(lv >= rv),
             })
         }
     }
@@ -730,8 +728,8 @@ impl SymbolTable {
         Ok(())
     }
 
-    /// Returns reference to inner HashMap for expression evaluation.
-    pub fn as_map(&self) -> &HashMap<String, i64> {
+    /// Returns reference to inner `HashMap` for expression evaluation.
+    pub const fn as_map(&self) -> &HashMap<String, i64> {
         &self.symbols
     }
 }
@@ -753,20 +751,20 @@ impl Size {
     /// Parses size from suffix string (B, W, L, or S for short).
     pub fn from_suffix(s: &str) -> Option<Self> {
         match s.to_ascii_uppercase().as_str() {
-            "B" => Some(Size::Byte),
-            "W" => Some(Size::Word),
-            "L" => Some(Size::Long),
-            "S" => Some(Size::Word), // Short is word for branches
+            "B" => Some(Self::Byte),
+            "W" => Some(Self::Word),
+            "L" => Some(Self::Long),
+            "S" => Some(Self::Word), // Short is word for branches
             _ => None,
         }
     }
 
     /// Returns size in bytes.
-    pub fn bytes(self) -> usize {
+    pub const fn bytes(self) -> usize {
         match self {
-            Size::Byte => 1,
-            Size::Word => 2,
-            Size::Long => 4,
+            Self::Byte => 1,
+            Self::Word => 2,
+            Self::Long => 4,
         }
     }
 }
@@ -810,7 +808,7 @@ pub enum AddrMode {
     Usp,
 }
 
-/// Parses a register name, returns (register number, is_address_reg).
+/// Parses a register name, returns (register number, `is_address_reg`).
 fn parse_register(name: &str) -> Option<(u8, bool)> {
     let upper = name.to_ascii_uppercase();
     if upper == "SP" || upper == "A7" {
@@ -842,9 +840,9 @@ fn parse_register_list(s: &str) -> Result<u16, String> {
             let start = iter.next().ok_or("invalid register range")?;
             let end = iter.next().ok_or("invalid register range")?;
             let (start_num, start_is_addr) =
-                parse_register(start).ok_or_else(|| format!("invalid register: {}", start))?;
+                parse_register(start).ok_or_else(|| format!("invalid register: {start}"))?;
             let (end_num, end_is_addr) =
-                parse_register(end).ok_or_else(|| format!("invalid register: {}", end))?;
+                parse_register(end).ok_or_else(|| format!("invalid register: {end}"))?;
             if start_is_addr != end_is_addr {
                 return Err("register range must be same type".to_string());
             }
@@ -855,7 +853,7 @@ fn parse_register_list(s: &str) -> Result<u16, String> {
         } else {
             // Single register
             let (num, is_addr) =
-                parse_register(part).ok_or_else(|| format!("invalid register: {}", part))?;
+                parse_register(part).ok_or_else(|| format!("invalid register: {part}"))?;
             let bit = if is_addr { 8 + num } else { num };
             mask |= 1 << bit;
         }
@@ -909,7 +907,7 @@ pub fn encode_ea(
             let disp = try_eval_expr(expr, symbols, pc, pass, scope)? as i8;
             let xr = if *is_addr { 0x8000 } else { 0 };
             let xs = if *sz == Size::Long { 0x0800 } else { 0 };
-            let ext = xr | xs | ((*xn as u16) << 12) | ((disp as u8) as u16);
+            let ext = xr | xs | (u16::from(*xn) << 12) | u16::from(disp as u8);
             Ok((0b110, *an, vec![ext]))
         }
         AddrMode::AbsShort(expr) => {
@@ -923,15 +921,15 @@ pub fn encode_ea(
         AddrMode::PcDisp(expr) => {
             let target = try_eval_expr(expr, symbols, pc, pass, scope)?;
             // pc is already the extension word address (callers pass self.pc + 2)
-            let disp = (target - pc as i64) as i16;
+            let disp = (target - i64::from(pc)) as i16;
             Ok((0b111, 0b010, vec![disp as u16]))
         }
         AddrMode::PcIndex(expr, xn, sz, is_addr) => {
             let target = try_eval_expr(expr, symbols, pc, pass, scope)?;
-            let disp = (target - pc as i64) as i8;
+            let disp = (target - i64::from(pc)) as i8;
             let xr = if *is_addr { 0x8000 } else { 0 };
             let xs = if *sz == Size::Long { 0x0800 } else { 0 };
-            let ext = xr | xs | ((*xn as u16) << 12) | ((disp as u8) as u16);
+            let ext = xr | xs | (u16::from(*xn) << 12) | u16::from(disp as u8);
             Ok((0b111, 0b011, vec![ext]))
         }
         AddrMode::Immediate(_) => {
@@ -1178,7 +1176,7 @@ fn parse_index_reg(name: &str) -> Result<(u8, bool, Size), String> {
     if let Some((n, is_addr)) = parse_register(reg_part) {
         Ok((n, is_addr, size))
     } else {
-        Err(format!("invalid index register: {}", name))
+        Err(format!("invalid index register: {name}"))
     }
 }
 
@@ -1221,7 +1219,7 @@ pub fn split_operands(tokens: &[LocatedToken]) -> Vec<&[LocatedToken]> {
 // INSTRUCTION DEFINITIONS
 // ============================================================================
 
-/// Condition codes for Bcc, Scc, DBcc instructions.
+/// Condition codes for Bcc, Scc, `DBcc` instructions.
 #[derive(Debug, Clone, Copy)]
 pub enum Condition {
     True = 0,  // T
@@ -1245,22 +1243,22 @@ pub enum Condition {
 impl Condition {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_ascii_uppercase().as_str() {
-            "T" | "RA" => Some(Condition::True),
-            "F" | "SR" => Some(Condition::False),
-            "HI" => Some(Condition::Hi),
-            "LS" => Some(Condition::Ls),
-            "CC" | "HS" => Some(Condition::Cc),
-            "CS" | "LO" => Some(Condition::Cs),
-            "NE" => Some(Condition::Ne),
-            "EQ" => Some(Condition::Eq),
-            "VC" => Some(Condition::Vc),
-            "VS" => Some(Condition::Vs),
-            "PL" => Some(Condition::Pl),
-            "MI" => Some(Condition::Mi),
-            "GE" => Some(Condition::Ge),
-            "LT" => Some(Condition::Lt),
-            "GT" => Some(Condition::Gt),
-            "LE" => Some(Condition::Le),
+            "T" | "RA" => Some(Self::True),
+            "F" | "SR" => Some(Self::False),
+            "HI" => Some(Self::Hi),
+            "LS" => Some(Self::Ls),
+            "CC" | "HS" => Some(Self::Cc),
+            "CS" | "LO" => Some(Self::Cs),
+            "NE" => Some(Self::Ne),
+            "EQ" => Some(Self::Eq),
+            "VC" => Some(Self::Vc),
+            "VS" => Some(Self::Vs),
+            "PL" => Some(Self::Pl),
+            "MI" => Some(Self::Mi),
+            "GE" => Some(Self::Ge),
+            "LT" => Some(Self::Lt),
+            "GT" => Some(Self::Gt),
+            "LE" => Some(Self::Le),
             _ => None,
         }
     }
@@ -1561,7 +1559,7 @@ pub fn split_lines(tokens: &[LocatedToken]) -> Vec<&[LocatedToken]> {
 
 /// Preprocessor state for handling macros, includes, conditionals.
 pub struct Preprocessor {
-    /// Macro definitions: name -> (param_names, body_lines).
+    /// Macro definitions: name -> (`param_names`, `body_lines`).
     macros: HashMap<String, (Vec<String>, Vec<String>)>,
     /// Include search paths.
     include_paths: Vec<PathBuf>,
@@ -1593,7 +1591,7 @@ impl Preprocessor {
     fn unique_suffix(&mut self) -> String {
         let n = self.unique_counter;
         self.unique_counter += 1;
-        format!("{}", n)
+        format!("{n}")
     }
 
     /// Preprocesses source text, expanding includes, macros, rept, and conditionals.
@@ -1801,7 +1799,11 @@ impl Preprocessor {
             let upper1 = parts[1].to_ascii_uppercase();
             if upper1 == "MACRO" {
                 let name = parts[0].to_string();
-                let params: Vec<String> = parts.iter().skip(2).map(|s| s.to_string()).collect();
+                let params: Vec<String> = parts
+                    .iter()
+                    .skip(2)
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 return Some((name, params));
             }
         }
@@ -1830,7 +1832,7 @@ impl Preprocessor {
             {
                 depth += 1;
             }
-            if trimmed == end_directive || trimmed.starts_with(&format!("{} ", end_directive)) {
+            if trimmed == end_directive || trimmed.starts_with(&format!("{end_directive} ")) {
                 depth -= 1;
                 if depth == 0 {
                     return Ok((body, i));
@@ -1847,7 +1849,7 @@ impl Preprocessor {
             i += 1;
         }
 
-        Err(format!("unterminated {}", end_directive))
+        Err(format!("unterminated {end_directive}"))
     }
 
     fn parse_rept_count(&self, line: &str) -> Result<usize, String> {
@@ -1887,7 +1889,7 @@ impl Preprocessor {
             }
         }
 
-        Err(format!("invalid rept count: {}", rest))
+        Err(format!("invalid rept count: {rest}"))
     }
 
     fn handle_conditional(
@@ -1997,7 +1999,7 @@ impl Preprocessor {
             } else {
                 arg_text
                     .split(',')
-                    .map(|s| s.trim())
+                    .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .collect()
             };
@@ -2038,7 +2040,7 @@ impl Preprocessor {
                     }
 
                     // Expand: for each argument, output the rept body with \+ replaced
-                    for arg in args.iter() {
+                    for arg in &args {
                         for rept_line in &rept_body {
                             let mut expanded = rept_line.clone();
                             // Replace \@ with unique suffix
@@ -2064,7 +2066,7 @@ impl Preprocessor {
                 let mut expanded = line.clone();
 
                 // Replace \@@ with unique suffix + @ (vasm compatibility)
-                expanded = expanded.replace("\\@@", &format!("{}@", suffix));
+                expanded = expanded.replace("\\@@", &format!("{suffix}@"));
 
                 // Replace \@ with unique suffix
                 expanded = expanded.replace("\\@", &suffix);
@@ -2120,7 +2122,7 @@ impl Assembler {
     /// Processes an ORG directive.
     pub fn handle_org(&mut self, operands: &[LocatedToken], loc: &SourceLoc) -> Result<(), String> {
         if operands.is_empty() {
-            return Err(format!("{}: org requires an address", loc));
+            return Err(format!("{loc}: org requires an address"));
         }
         let mut parser = ExprParser::new(operands);
         let expr = parser.parse_expr()?;
@@ -2134,7 +2136,7 @@ impl Assembler {
 
     /// Processes an EQU directive.
     /// Note: If the expression can't be evaluated yet (forward reference),
-    /// we'll try again later. The assemble_source function handles this.
+    /// we'll try again later. The `assemble_source` function handles this.
     pub fn handle_equ(
         &mut self,
         label: &str,
@@ -2142,7 +2144,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if operands.is_empty() {
-            return Err(format!("{}: equ requires a value", loc));
+            return Err(format!("{loc}: equ requires a value"));
         }
         let mut parser = ExprParser::new(operands);
         let expr = parser.parse_expr()?;
@@ -2201,7 +2203,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if operands.is_empty() {
-            return Err(format!("{}: dc requires data", loc));
+            return Err(format!("{loc}: dc requires data"));
         }
 
         // Parse comma-separated values
@@ -2212,8 +2214,8 @@ impl Assembler {
                 for byte in s.bytes() {
                     match size {
                         Size::Byte => self.emit_byte(byte),
-                        Size::Word => self.emit_word(byte as u16),
-                        Size::Long => self.emit_long(byte as u32),
+                        Size::Word => self.emit_word(u16::from(byte)),
+                        Size::Long => self.emit_long(u32::from(byte)),
                     }
                 }
                 pos += 1;
@@ -2261,7 +2263,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if operands.is_empty() {
-            return Err(format!("{}: dcb requires count", loc));
+            return Err(format!("{loc}: dcb requires count"));
         }
 
         // Parse count,value (comma-separated) or just count (fills with 0)
@@ -2309,7 +2311,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if operands.is_empty() {
-            return Err(format!("{}: ds requires a count", loc));
+            return Err(format!("{loc}: ds requires a count"));
         }
         let mut parser = ExprParser::new(operands);
         let expr = parser.parse_expr()?;
@@ -2328,7 +2330,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if operands.is_empty() {
-            return Err(format!("{}: rsset requires an address", loc));
+            return Err(format!("{loc}: rsset requires an address"));
         }
         let mut parser = ExprParser::new(operands);
         let expr = parser.parse_expr()?;
@@ -2346,7 +2348,7 @@ impl Assembler {
         _loc: &SourceLoc,
     ) -> Result<(), String> {
         // RS returns current RS counter, then advances it
-        let current = self.rs_counter as i64;
+        let current = i64::from(self.rs_counter);
         self.symbols.define(label, current)?;
 
         let count = if operands.is_empty() {
@@ -2376,12 +2378,9 @@ impl Assembler {
             // Don't define label for EQU (it's handled specially)
             let mnemonic = line.mnemonic.as_ref().map(|s| s.to_ascii_uppercase());
             if mnemonic.as_deref() != Some("EQU")
-                && !mnemonic
-                    .as_ref()
-                    .map(|s| s.starts_with("RS"))
-                    .unwrap_or(false)
+                && !mnemonic.as_ref().is_some_and(|s| s.starts_with("RS"))
             {
-                self.symbols.define(&full_label, self.pc as i64)?;
+                self.symbols.define(&full_label, i64::from(self.pc))?;
             }
         }
 
@@ -2534,7 +2533,7 @@ impl Assembler {
             "MOVEM" => self.encode_movem(size, &ops, loc),
             "MOVEP" => self.encode_movep(size, &ops, loc),
 
-            _ => Err(format!("{}: unknown instruction: {}", loc, mnemonic)),
+            _ => Err(format!("{loc}: unknown instruction: {mnemonic}")),
         }
     }
 
@@ -2552,7 +2551,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: move requires 2 operands", loc));
+            return Err(format!("{loc}: move requires 2 operands"));
         }
 
         let src = parse_operand(ops[0], self.symbols.as_map())?;
@@ -2593,10 +2592,10 @@ impl Assembler {
 
         // MOVE encoding: 00 size dst_reg dst_mode src_mode src_reg
         let opcode = (sz_bits << 12)
-            | ((dst_reg as u16) << 9)
-            | ((dst_mode as u16) << 6)
-            | ((src_mode as u16) << 3)
-            | (src_reg as u16);
+            | (u16::from(dst_reg) << 9)
+            | (u16::from(dst_mode) << 6)
+            | (u16::from(src_mode) << 3)
+            | u16::from(src_reg);
         self.emit_word(opcode);
         for ext in src_ext {
             self.emit_word(ext);
@@ -2614,7 +2613,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: movea requires 2 operands", loc));
+            return Err(format!("{loc}: movea requires 2 operands"));
         }
         // MOVEA is just MOVE with address register destination
         self.encode_move(size, ops, loc)
@@ -2622,35 +2621,35 @@ impl Assembler {
 
     fn encode_moveq(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: moveq requires 2 operands", loc));
+            return Err(format!("{loc}: moveq requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let imm = match src {
             AddrMode::Immediate(ref expr) => eval_expr(expr, self.symbols.as_map(), self.pc)? as i8,
-            _ => return Err(format!("{}: moveq source must be immediate", loc)),
+            _ => return Err(format!("{loc}: moveq source must be immediate")),
         };
         let dreg = match dst {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: moveq destination must be data register", loc)),
+            _ => return Err(format!("{loc}: moveq destination must be data register")),
         };
 
-        let opcode = 0x7000 | ((dreg as u16) << 9) | ((imm as u8) as u16);
+        let opcode = 0x7000 | (u16::from(dreg) << 9) | u16::from(imm as u8);
         self.emit_word(opcode);
         Ok(())
     }
 
     fn encode_lea(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: lea requires 2 operands", loc));
+            return Err(format!("{loc}: lea requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let areg = match dst {
             AddrMode::AddrReg(r) => r,
-            _ => return Err(format!("{}: lea destination must be address register", loc)),
+            _ => return Err(format!("{loc}: lea destination must be address register")),
         };
 
         let (mode, reg, ext) = encode_ea(
@@ -2660,7 +2659,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x41C0 | ((areg as u16) << 9) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x41C0 | (u16::from(areg) << 9) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -2670,7 +2669,7 @@ impl Assembler {
 
     fn encode_pea(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: pea requires 1 operand", loc));
+            return Err(format!("{loc}: pea requires 1 operand"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let (mode, reg, ext) = encode_ea(
@@ -2680,7 +2679,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4840 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4840 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -2695,7 +2694,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: clr requires 1 operand", loc));
+            return Err(format!("{loc}: clr requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let sz = match size {
@@ -2710,7 +2709,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4200 | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4200 | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -2720,7 +2719,7 @@ impl Assembler {
 
     fn encode_exg(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: exg requires 2 operands", loc));
+            return Err(format!("{loc}: exg requires 2 operands"));
         }
         let a = parse_operand(ops[0], self.symbols.as_map())?;
         let b = parse_operand(ops[1], self.symbols.as_map())?;
@@ -2730,24 +2729,24 @@ impl Assembler {
             (AddrMode::AddrReg(x), AddrMode::AddrReg(y)) => (*x, *y, 0b01001),
             (AddrMode::DataReg(x), AddrMode::AddrReg(y)) => (*x, *y, 0b10001),
             (AddrMode::AddrReg(x), AddrMode::DataReg(y)) => (*y, *x, 0b10001),
-            _ => return Err(format!("{}: exg requires register operands", loc)),
+            _ => return Err(format!("{loc}: exg requires register operands")),
         };
 
-        let opcode = 0xC100 | ((rx as u16) << 9) | (mode << 3) | (ry as u16);
+        let opcode = 0xC100 | (u16::from(rx) << 9) | (mode << 3) | u16::from(ry);
         self.emit_word(opcode);
         Ok(())
     }
 
     fn encode_swap(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: swap requires 1 operand", loc));
+            return Err(format!("{loc}: swap requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let dreg = match dst {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: swap requires data register", loc)),
+            _ => return Err(format!("{loc}: swap requires data register")),
         };
-        self.emit_word(0x4840 | (dreg as u16));
+        self.emit_word(0x4840 | u16::from(dreg));
         Ok(())
     }
 
@@ -2825,7 +2824,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
@@ -2841,10 +2840,10 @@ impl Assembler {
                 // <ea>,Dn
                 let (mode, reg, ext) = self.encode_ea_with_imm(&src, size)?;
                 let opcode = base
-                    | (((*dreg) as u16) << 9)
+                    | (u16::from(*dreg) << 9)
                     | (sz << 6)
-                    | ((mode as u16) << 3)
-                    | (reg as u16);
+                    | (u16::from(mode) << 3)
+                    | u16::from(reg);
                 self.emit_word(opcode);
                 for e in ext {
                     self.emit_word(e);
@@ -2861,16 +2860,16 @@ impl Assembler {
                 )?;
                 let opmode = sz | 0b100;
                 let opcode = base
-                    | (((*dreg) as u16) << 9)
+                    | (u16::from(*dreg) << 9)
                     | (opmode << 6)
-                    | ((mode as u16) << 3)
-                    | (reg as u16);
+                    | (u16::from(mode) << 3)
+                    | u16::from(reg);
                 self.emit_word(opcode);
                 for e in ext {
                     self.emit_word(e);
                 }
             }
-            _ => return Err(format!("{}: invalid operand combination", loc)),
+            _ => return Err(format!("{loc}: invalid operand combination")),
         }
         Ok(())
     }
@@ -2901,23 +2900,23 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let areg = match dst {
             AddrMode::AddrReg(r) => r,
-            _ => return Err(format!("{}: destination must be address register", loc)),
+            _ => return Err(format!("{loc}: destination must be address register")),
         };
 
         let opmode = if size == Size::Long { 0b111 } else { 0b011 };
         let (mode, reg, ext) = self.encode_ea_with_imm(&src, size)?;
         let opcode = (base & 0xF0C0)
-            | ((areg as u16) << 9)
+            | (u16::from(areg) << 9)
             | (opmode << 6)
-            | ((mode as u16) << 3)
-            | (reg as u16);
+            | (u16::from(mode) << 3)
+            | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -2951,14 +2950,14 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let imm = match src {
             AddrMode::Immediate(ref expr) => eval_expr(expr, self.symbols.as_map(), self.pc)?,
-            _ => return Err(format!("{}: source must be immediate", loc)),
+            _ => return Err(format!("{loc}: source must be immediate")),
         };
 
         let sz = match size {
@@ -2973,7 +2972,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = base | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = base | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
 
         match size {
@@ -3012,14 +3011,14 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let imm = match src {
             AddrMode::Immediate(ref expr) => eval_expr(expr, self.symbols.as_map(), self.pc)? as u8,
-            _ => return Err(format!("{}: source must be immediate 1-8", loc)),
+            _ => return Err(format!("{loc}: source must be immediate 1-8")),
         };
         let data = if imm == 8 { 0 } else { imm };
 
@@ -3035,7 +3034,8 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = base | ((data as u16) << 9) | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode =
+            base | (u16::from(data) << 9) | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3069,7 +3069,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
@@ -3082,19 +3082,14 @@ impl Assembler {
 
         match (&src, &dst) {
             (AddrMode::DataReg(rx), AddrMode::DataReg(ry)) => {
-                let opcode = base | (((*ry) as u16) << 9) | (sz << 6) | (*rx as u16);
+                let opcode = base | (u16::from(*ry) << 9) | (sz << 6) | u16::from(*rx);
                 self.emit_word(opcode);
             }
             (AddrMode::PreDec(rx), AddrMode::PreDec(ry)) => {
-                let opcode = base | (((*ry) as u16) << 9) | (sz << 6) | 0x08 | (*rx as u16);
+                let opcode = base | (u16::from(*ry) << 9) | (sz << 6) | 0x08 | u16::from(*rx);
                 self.emit_word(opcode);
             }
-            _ => {
-                return Err(format!(
-                    "{}: invalid operand combination for addx/subx",
-                    loc
-                ))
-            }
+            _ => return Err(format!("{loc}: invalid operand combination for addx/subx")),
         }
         Ok(())
     }
@@ -3143,7 +3138,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: requires 1 operand", loc));
+            return Err(format!("{loc}: requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let sz = match size {
@@ -3158,7 +3153,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = base | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = base | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3173,15 +3168,15 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: ext requires 1 operand", loc));
+            return Err(format!("{loc}: ext requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let dreg = match dst {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: ext requires data register", loc)),
+            _ => return Err(format!("{loc}: ext requires data register")),
         };
         let opmode = if size == Size::Long { 0b011 } else { 0b010 };
-        self.emit_word(0x4800 | (opmode << 6) | (dreg as u16));
+        self.emit_word(0x4800 | (opmode << 6) | u16::from(dreg));
         Ok(())
     }
 
@@ -3208,18 +3203,18 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let dreg = match dst {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: destination must be data register", loc)),
+            _ => return Err(format!("{loc}: destination must be data register")),
         };
 
         let (mode, reg, ext) = self.encode_ea_with_imm(&src, Size::Word)?;
-        let opcode = base | ((dreg as u16) << 9) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = base | (u16::from(dreg) << 9) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3234,7 +3229,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: cmp requires 2 operands", loc));
+            return Err(format!("{loc}: cmp requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
@@ -3243,8 +3238,11 @@ impl Assembler {
         if let AddrMode::AddrReg(areg) = dst {
             let opmode = if size == Size::Long { 0b111 } else { 0b011 };
             let (mode, reg, ext) = self.encode_ea_with_imm(&src, size)?;
-            let opcode =
-                0xB0C0 | ((areg as u16) << 9) | (opmode << 6) | ((mode as u16) << 3) | (reg as u16);
+            let opcode = 0xB0C0
+                | (u16::from(areg) << 9)
+                | (opmode << 6)
+                | (u16::from(mode) << 3)
+                | u16::from(reg);
             self.emit_word(opcode);
             for e in ext {
                 self.emit_word(e);
@@ -3260,7 +3258,7 @@ impl Assembler {
 
         let dreg = match dst {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: cmp destination must be data register", loc)),
+            _ => return Err(format!("{loc}: cmp destination must be data register")),
         };
 
         let sz = match size {
@@ -3270,7 +3268,7 @@ impl Assembler {
         };
         let (mode, reg, ext) = self.encode_ea_with_imm(&src, size)?;
         let opcode =
-            0xB000 | ((dreg as u16) << 9) | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+            0xB000 | (u16::from(dreg) << 9) | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3285,25 +3283,23 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: cmpa requires 2 operands", loc));
+            return Err(format!("{loc}: cmpa requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let areg = match dst {
             AddrMode::AddrReg(r) => r,
-            _ => {
-                return Err(format!(
-                    "{}: cmpa destination must be address register",
-                    loc
-                ))
-            }
+            _ => return Err(format!("{loc}: cmpa destination must be address register")),
         };
 
         let opmode = if size == Size::Long { 0b111 } else { 0b011 };
         let (mode, reg, ext) = self.encode_ea_with_imm(&src, size)?;
-        let opcode =
-            0xB0C0 | ((areg as u16) << 9) | (opmode << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0xB0C0
+            | (u16::from(areg) << 9)
+            | (opmode << 6)
+            | (u16::from(mode) << 3)
+            | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3327,14 +3323,14 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: cmpm requires 2 operands", loc));
+            return Err(format!("{loc}: cmpm requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let (ax, ay) = match (&src, &dst) {
             (AddrMode::PostInc(x), AddrMode::PostInc(y)) => (*x, *y),
-            _ => return Err(format!("{}: cmpm requires (An)+,(An)+ operands", loc)),
+            _ => return Err(format!("{loc}: cmpm requires (An)+,(An)+ operands")),
         };
 
         let sz = match size {
@@ -3342,7 +3338,7 @@ impl Assembler {
             Size::Word => 1,
             Size::Long => 2,
         };
-        let opcode = 0xB108 | ((ay as u16) << 9) | (sz << 6) | (ax as u16);
+        let opcode = 0xB108 | (u16::from(ay) << 9) | (sz << 6) | u16::from(ax);
         self.emit_word(opcode);
         Ok(())
     }
@@ -3389,14 +3385,14 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: eor requires 2 operands", loc));
+            return Err(format!("{loc}: eor requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let dreg = match src {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: eor source must be data register", loc)),
+            _ => return Err(format!("{loc}: eor source must be data register")),
         };
 
         let sz = match size {
@@ -3412,8 +3408,11 @@ impl Assembler {
             self.scope(),
         )?;
         let opmode = sz | 0b100;
-        let opcode =
-            0xB000 | ((dreg as u16) << 9) | (opmode << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0xB000
+            | (u16::from(dreg) << 9)
+            | (opmode << 6)
+            | (u16::from(mode) << 3)
+            | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3429,7 +3428,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
@@ -3444,10 +3443,10 @@ impl Assembler {
             (_, AddrMode::DataReg(dreg)) => {
                 let (mode, reg, ext) = self.encode_ea_with_imm(&src, size)?;
                 let opcode = base
-                    | (((*dreg) as u16) << 9)
+                    | (u16::from(*dreg) << 9)
                     | (sz << 6)
-                    | ((mode as u16) << 3)
-                    | (reg as u16);
+                    | (u16::from(mode) << 3)
+                    | u16::from(reg);
                 self.emit_word(opcode);
                 for e in ext {
                     self.emit_word(e);
@@ -3463,16 +3462,16 @@ impl Assembler {
                 )?;
                 let opmode = sz | 0b100;
                 let opcode = base
-                    | (((*dreg) as u16) << 9)
+                    | (u16::from(*dreg) << 9)
                     | (opmode << 6)
-                    | ((mode as u16) << 3)
-                    | (reg as u16);
+                    | (u16::from(mode) << 3)
+                    | u16::from(reg);
                 self.emit_word(opcode);
                 for e in ext {
                     self.emit_word(e);
                 }
             }
-            _ => return Err(format!("{}: invalid operand combination", loc)),
+            _ => return Err(format!("{loc}: invalid operand combination")),
         }
         Ok(())
     }
@@ -3543,7 +3542,7 @@ impl Assembler {
             AddrMode::Immediate(ref expr) => {
                 eval_expr(expr, self.symbols.as_map(), self.pc)? as u16
             }
-            _ => return Err(format!("{}: source must be immediate", loc)),
+            _ => return Err(format!("{loc}: source must be immediate")),
         };
         self.emit_word(opcode);
         self.emit_word(imm & 0xFF);
@@ -3561,7 +3560,7 @@ impl Assembler {
             AddrMode::Immediate(ref expr) => {
                 eval_expr(expr, self.symbols.as_map(), self.pc)? as u16
             }
-            _ => return Err(format!("{}: source must be immediate", loc)),
+            _ => return Err(format!("{loc}: source must be immediate")),
         };
         self.emit_word(opcode);
         self.emit_word(imm);
@@ -3587,7 +3586,7 @@ impl Assembler {
                 self.pass,
                 self.scope(),
             )?;
-            let opcode = 0xE0C0 | (kind << 9) | ((mode as u16) << 3) | (reg as u16);
+            let opcode = 0xE0C0 | (kind << 9) | (u16::from(mode) << 3) | u16::from(reg);
             self.emit_word(opcode);
             for e in ext {
                 self.emit_word(e);
@@ -3598,7 +3597,7 @@ impl Assembler {
 
             let dreg = match dst {
                 AddrMode::DataReg(r) => r,
-                _ => return Err(format!("{}: shift destination must be data register", loc)),
+                _ => return Err(format!("{loc}: shift destination must be data register")),
             };
 
             let sz = match size {
@@ -3612,11 +3611,11 @@ impl Assembler {
                 AddrMode::DataReg(creg) => {
                     // Register count
                     let opcode = 0xE020
-                        | ((creg as u16) << 9)
+                        | (u16::from(creg) << 9)
                         | (direction << 8)
                         | (sz << 6)
                         | ((kind & 3) << 3)
-                        | (dreg as u16);
+                        | u16::from(dreg);
                     self.emit_word(opcode);
                 }
                 AddrMode::Immediate(ref expr) => {
@@ -3627,18 +3626,17 @@ impl Assembler {
                         | (direction << 8)
                         | (sz << 6)
                         | ((kind & 3) << 3)
-                        | (dreg as u16);
+                        | u16::from(dreg);
                     self.emit_word(opcode);
                 }
                 _ => {
                     return Err(format!(
-                        "{}: shift count must be immediate or data register",
-                        loc
+                        "{loc}: shift count must be immediate or data register"
                     ))
                 }
             }
         } else {
-            return Err(format!("{}: shift requires 1 or 2 operands", loc));
+            return Err(format!("{loc}: shift requires 1 or 2 operands"));
         }
         Ok(())
     }
@@ -3651,7 +3649,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: bit operation requires 2 operands", loc));
+            return Err(format!("{loc}: bit operation requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
@@ -3666,8 +3664,11 @@ impl Assembler {
                     self.pass,
                     self.scope(),
                 )?;
-                let opcode =
-                    0x0100 | ((dreg as u16) << 9) | (op << 6) | ((mode as u16) << 3) | (reg as u16);
+                let opcode = 0x0100
+                    | (u16::from(dreg) << 9)
+                    | (op << 6)
+                    | (u16::from(mode) << 3)
+                    | u16::from(reg);
                 self.emit_word(opcode);
                 for e in ext {
                     self.emit_word(e);
@@ -3683,7 +3684,7 @@ impl Assembler {
                     self.pass,
                     self.scope(),
                 )?;
-                let opcode = 0x0800 | (op << 6) | ((mode as u16) << 3) | (reg as u16);
+                let opcode = 0x0800 | (op << 6) | (u16::from(mode) << 3) | u16::from(reg);
                 self.emit_word(opcode);
                 self.emit_word(bit_num);
                 for e in ext {
@@ -3692,8 +3693,7 @@ impl Assembler {
             }
             _ => {
                 return Err(format!(
-                    "{}: bit number must be immediate or data register",
-                    loc
+                    "{loc}: bit number must be immediate or data register"
                 ))
             }
         }
@@ -3708,28 +3708,28 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: requires 2 operands", loc));
+            return Err(format!("{loc}: requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         match (&src, &dst) {
             (AddrMode::DataReg(rx), AddrMode::DataReg(ry)) => {
-                let opcode = base | (((*ry) as u16) << 9) | (*rx as u16);
+                let opcode = base | (u16::from(*ry) << 9) | u16::from(*rx);
                 self.emit_word(opcode);
             }
             (AddrMode::PreDec(rx), AddrMode::PreDec(ry)) => {
-                let opcode = base | (((*ry) as u16) << 9) | 0x08 | (*rx as u16);
+                let opcode = base | (u16::from(*ry) << 9) | 0x08 | u16::from(*rx);
                 self.emit_word(opcode);
             }
-            _ => return Err(format!("{}: invalid operand combination for BCD", loc)),
+            _ => return Err(format!("{loc}: invalid operand combination for BCD")),
         }
         Ok(())
     }
 
     fn encode_nbcd(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: nbcd requires 1 operand", loc));
+            return Err(format!("{loc}: nbcd requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let (mode, reg, ext) = encode_ea(
@@ -3739,7 +3739,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4800 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4800 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3763,7 +3763,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         let cc = Condition::from_name(&mnemonic[1..])
-            .ok_or_else(|| format!("{}: unknown condition", loc))?;
+            .ok_or_else(|| format!("{loc}: unknown condition"))?;
         let base = 0x6000 | ((cc as u16) << 8);
         self.encode_branch(base, ops, loc)
     }
@@ -3775,7 +3775,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: branch requires 1 operand", loc));
+            return Err(format!("{loc}: branch requires 1 operand"));
         }
 
         let mut parser = ExprParser::new(ops[0]);
@@ -3784,14 +3784,14 @@ impl Assembler {
         // In pass 1, we may have forward references. Use placeholder.
         let target = match eval_expr_scoped(&expr, self.symbols.as_map(), self.pc, self.scope()) {
             Ok(t) => t,
-            Err(_) if self.pass == 1 => self.pc as i64, // Placeholder
+            Err(_) if self.pass == 1 => i64::from(self.pc), // Placeholder
             Err(e) => return Err(e),
         };
-        let disp = target - (self.pc as i64 + 2);
+        let disp = target - (i64::from(self.pc) + 2);
 
         if (-128..=127).contains(&disp) && disp != 0 {
             // Short branch
-            let opcode = base | ((disp as u8) as u16);
+            let opcode = base | u16::from(disp as u8);
             self.emit_word(opcode);
         } else {
             // Word displacement
@@ -3808,19 +3808,19 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: dbcc requires 2 operands", loc));
+            return Err(format!("{loc}: dbcc requires 2 operands"));
         }
 
         let cc = if mnemonic == "DBRA" {
             Condition::False
         } else {
             let cc_name = &mnemonic[2..];
-            Condition::from_name(cc_name).ok_or_else(|| format!("{}: unknown condition", loc))?
+            Condition::from_name(cc_name).ok_or_else(|| format!("{loc}: unknown condition"))?
         };
 
         let dreg = match parse_operand(ops[0], self.symbols.as_map())? {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: dbcc requires data register", loc)),
+            _ => return Err(format!("{loc}: dbcc requires data register")),
         };
 
         let mut parser = ExprParser::new(ops[1]);
@@ -3828,12 +3828,12 @@ impl Assembler {
         // In pass 1, we may have forward references. Use placeholder.
         let target = match eval_expr_scoped(&expr, self.symbols.as_map(), self.pc, self.scope()) {
             Ok(t) => t,
-            Err(_) if self.pass == 1 => self.pc as i64, // Placeholder
+            Err(_) if self.pass == 1 => i64::from(self.pc), // Placeholder
             Err(e) => return Err(e),
         };
-        let disp = target - (self.pc as i64 + 2);
+        let disp = target - (i64::from(self.pc) + 2);
 
-        let opcode = 0x50C8 | ((cc as u16) << 8) | (dreg as u16);
+        let opcode = 0x50C8 | ((cc as u16) << 8) | u16::from(dreg);
         self.emit_word(opcode);
         self.emit_word(disp as u16);
         Ok(())
@@ -3846,11 +3846,11 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: scc requires 1 operand", loc));
+            return Err(format!("{loc}: scc requires 1 operand"));
         }
 
         let cc = Condition::from_name(&mnemonic[1..])
-            .ok_or_else(|| format!("{}: unknown condition", loc))?;
+            .ok_or_else(|| format!("{loc}: unknown condition"))?;
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let (mode, reg, ext) = encode_ea(
             &dst,
@@ -3859,7 +3859,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x50C0 | ((cc as u16) << 8) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x50C0 | ((cc as u16) << 8) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3870,7 +3870,7 @@ impl Assembler {
     // Control instructions
     fn encode_jmp(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: jmp requires 1 operand", loc));
+            return Err(format!("{loc}: jmp requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let (mode, reg, ext) = encode_ea(
@@ -3880,7 +3880,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4EC0 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4EC0 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3890,7 +3890,7 @@ impl Assembler {
 
     fn encode_jsr(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: jsr requires 1 operand", loc));
+            return Err(format!("{loc}: jsr requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let (mode, reg, ext) = encode_ea(
@@ -3900,7 +3900,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4E80 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4E80 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3910,17 +3910,17 @@ impl Assembler {
 
     fn encode_trap(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: trap requires 1 operand", loc));
+            return Err(format!("{loc}: trap requires 1 operand"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let vector = match src {
             AddrMode::Immediate(ref expr) => {
                 eval_expr(expr, self.symbols.as_map(), self.pc)? as u16
             }
-            _ => return Err(format!("{}: trap requires immediate vector", loc)),
+            _ => return Err(format!("{loc}: trap requires immediate vector")),
         };
         if vector > 15 {
-            return Err(format!("{}: trap vector must be 0-15", loc));
+            return Err(format!("{loc}: trap vector must be 0-15"));
         }
         self.emit_word(0x4E40 | vector);
         Ok(())
@@ -3928,18 +3928,18 @@ impl Assembler {
 
     fn encode_chk(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: chk requires 2 operands", loc));
+            return Err(format!("{loc}: chk requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
 
         let dreg = match dst {
             AddrMode::DataReg(r) => r,
-            _ => return Err(format!("{}: chk destination must be data register", loc)),
+            _ => return Err(format!("{loc}: chk destination must be data register")),
         };
 
         let (mode, reg, ext) = self.encode_ea_with_imm(&src, Size::Word)?;
-        let opcode = 0x4180 | ((dreg as u16) << 9) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4180 | (u16::from(dreg) << 9) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -3949,50 +3949,50 @@ impl Assembler {
 
     fn encode_link(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: link requires 2 operands", loc));
+            return Err(format!("{loc}: link requires 2 operands"));
         }
         let areg_mode = parse_operand(ops[0], self.symbols.as_map())?;
         let disp_mode = parse_operand(ops[1], self.symbols.as_map())?;
 
         let areg = match areg_mode {
             AddrMode::AddrReg(r) => r,
-            _ => return Err(format!("{}: link requires address register", loc)),
+            _ => return Err(format!("{loc}: link requires address register")),
         };
         let disp = match disp_mode {
             AddrMode::Immediate(ref expr) => {
                 eval_expr(expr, self.symbols.as_map(), self.pc)? as i16
             }
-            _ => return Err(format!("{}: link requires immediate displacement", loc)),
+            _ => return Err(format!("{loc}: link requires immediate displacement")),
         };
 
-        self.emit_word(0x4E50 | (areg as u16));
+        self.emit_word(0x4E50 | u16::from(areg));
         self.emit_word(disp as u16);
         Ok(())
     }
 
     fn encode_unlk(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: unlk requires 1 operand", loc));
+            return Err(format!("{loc}: unlk requires 1 operand"));
         }
         let areg_mode = parse_operand(ops[0], self.symbols.as_map())?;
         let areg = match areg_mode {
             AddrMode::AddrReg(r) => r,
-            _ => return Err(format!("{}: unlk requires address register", loc)),
+            _ => return Err(format!("{loc}: unlk requires address register")),
         };
-        self.emit_word(0x4E58 | (areg as u16));
+        self.emit_word(0x4E58 | u16::from(areg));
         Ok(())
     }
 
     fn encode_stop(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: stop requires 1 operand", loc));
+            return Err(format!("{loc}: stop requires 1 operand"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let imm = match src {
             AddrMode::Immediate(ref expr) => {
                 eval_expr(expr, self.symbols.as_map(), self.pc)? as u16
             }
-            _ => return Err(format!("{}: stop requires immediate", loc)),
+            _ => return Err(format!("{loc}: stop requires immediate")),
         };
         self.emit_word(0x4E72);
         self.emit_word(imm);
@@ -4001,7 +4001,7 @@ impl Assembler {
 
     fn encode_tas(&mut self, ops: &[&[LocatedToken]], loc: &SourceLoc) -> Result<(), String> {
         if ops.len() != 1 {
-            return Err(format!("{}: tas requires 1 operand", loc));
+            return Err(format!("{loc}: tas requires 1 operand"));
         }
         let dst = parse_operand(ops[0], self.symbols.as_map())?;
         let (mode, reg, ext) = encode_ea(
@@ -4011,7 +4011,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4AC0 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4AC0 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -4026,7 +4026,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: movem requires 2 operands", loc));
+            return Err(format!("{loc}: movem requires 2 operands"));
         }
 
         // Determine direction: register list to memory, or memory to register list
@@ -4036,7 +4036,7 @@ impl Assembler {
             .iter()
             .all(|t| matches!(t.token, Token::Ident(_) | Token::Minus | Token::Slash));
 
-        let sz = if size == Size::Long { 1 } else { 0 };
+        let sz = u16::from(size == Size::Long);
 
         if first_is_reglist {
             // Try parsing first operand as register list
@@ -4068,7 +4068,7 @@ impl Assembler {
                     mask
                 };
 
-                let opcode = 0x4880 | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+                let opcode = 0x4880 | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
                 self.emit_word(opcode);
                 self.emit_word(mask);
                 for e in ext {
@@ -4098,7 +4098,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x4C80 | (sz << 6) | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x4C80 | (sz << 6) | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         self.emit_word(mask);
         for e in ext {
@@ -4114,7 +4114,7 @@ impl Assembler {
         loc: &SourceLoc,
     ) -> Result<(), String> {
         if ops.len() != 2 {
-            return Err(format!("{}: movep requires 2 operands", loc));
+            return Err(format!("{loc}: movep requires 2 operands"));
         }
         let src = parse_operand(ops[0], self.symbols.as_map())?;
         let dst = parse_operand(ops[1], self.symbols.as_map())?;
@@ -4125,25 +4125,25 @@ impl Assembler {
             (AddrMode::Disp(expr, areg), AddrMode::DataReg(dreg)) => {
                 // Memory to register
                 let disp = eval_expr(expr, self.symbols.as_map(), self.pc)? as u16;
-                let opcode = 0x0108 | (((*dreg) as u16) << 9) | (opmode << 6) | (*areg as u16);
+                let opcode = 0x0108 | (u16::from(*dreg) << 9) | (opmode << 6) | u16::from(*areg);
                 self.emit_word(opcode);
                 self.emit_word(disp);
             }
             (AddrMode::DataReg(dreg), AddrMode::Disp(expr, areg)) => {
                 // Register to memory
                 let disp = eval_expr(expr, self.symbols.as_map(), self.pc)? as u16;
-                let opcode = 0x0188 | (((*dreg) as u16) << 9) | (opmode << 6) | (*areg as u16);
+                let opcode = 0x0188 | (u16::from(*dreg) << 9) | (opmode << 6) | u16::from(*areg);
                 self.emit_word(opcode);
                 self.emit_word(disp);
             }
-            _ => return Err(format!("{}: movep requires d(An),Dn or Dn,d(An)", loc)),
+            _ => return Err(format!("{loc}: movep requires d(An),Dn or Dn,d(An)")),
         }
         Ok(())
     }
 
     fn encode_move_to_sr(&mut self, src: &AddrMode, _loc: &SourceLoc) -> Result<(), String> {
         let (mode, reg, ext) = self.encode_ea_with_imm(src, Size::Word)?;
-        let opcode = 0x46C0 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x46C0 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -4159,7 +4159,7 @@ impl Assembler {
             self.pass,
             self.scope(),
         )?;
-        let opcode = 0x40C0 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x40C0 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -4169,7 +4169,7 @@ impl Assembler {
 
     fn encode_move_to_ccr(&mut self, src: &AddrMode, _loc: &SourceLoc) -> Result<(), String> {
         let (mode, reg, ext) = self.encode_ea_with_imm(src, Size::Word)?;
-        let opcode = 0x44C0 | ((mode as u16) << 3) | (reg as u16);
+        let opcode = 0x44C0 | (u16::from(mode) << 3) | u16::from(reg);
         self.emit_word(opcode);
         for e in ext {
             self.emit_word(e);
@@ -4183,12 +4183,11 @@ impl Assembler {
             AddrMode::AddrReg(r) => *r,
             _ => {
                 return Err(format!(
-                    "{}: move to USP source must be address register",
-                    loc
+                    "{loc}: move to USP source must be address register"
                 ))
             }
         };
-        let opcode = 0x4E60 | (areg as u16);
+        let opcode = 0x4E60 | u16::from(areg);
         self.emit_word(opcode);
         Ok(())
     }
@@ -4199,12 +4198,11 @@ impl Assembler {
             AddrMode::AddrReg(r) => *r,
             _ => {
                 return Err(format!(
-                    "{}: move from USP destination must be address register",
-                    loc
+                    "{loc}: move from USP destination must be address register"
                 ))
             }
         };
-        let opcode = 0x4E68 | (areg as u16);
+        let opcode = 0x4E68 | u16::from(areg);
         self.emit_word(opcode);
         Ok(())
     }
